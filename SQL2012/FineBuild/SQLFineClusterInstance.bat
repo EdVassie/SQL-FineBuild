@@ -7,6 +7,7 @@ CALL "SQLFineBuild.bat" %*     /Type:Full                    /IAcceptLicenseTerm
  /SetupSQLDBCluster:YES                      ^
  /SetupSQLDBFS:NO                            ^
  /SetupSQLAS:NO                              ^
+ /SetupAlwaysOn:Yes                          ^
  /SQLSVCAccount:"ROOT\ServGB_SQLDB_1$"       ^
  /AGTSVCACCOUNT:"ROOT\ServGB_SQLAG_1$"       ^
  /FTSVCACCOUNT:"ROOT\ServGB_SQLFT_1$"        ^
