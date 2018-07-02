@@ -1,0 +1,201 @@
+;Automatically generated PRF file from the Microsoft Office Customization and Installation Wizard
+
+; **************************************************************
+; Section 1 - Profile Defaults
+; **************************************************************
+
+[General]
+Custom=1
+ProfileName=Microsoft Exchange Settings
+DefaultProfile=Yes
+OverwriteProfile=Append
+ModifyDefaultProfileIfPresent=TRUE
+
+; **************************************************************
+; Section 2 - Services in Profile
+; **************************************************************
+
+[Service List]
+Service1=Microsoft Exchange Server
+ServiceEGS=Exchange Global Section
+;ServiceX=Microsoft Outlook Client
+
+;***************************************************************
+; Section 3 - List of internet accounts
+;***************************************************************
+
+[Internet Account List]
+
+;***************************************************************
+; Section 4 - Default values for each service.
+;***************************************************************
+
+[Service1]
+OverwriteExistingService=Yes
+UniqueService=Yes
+MailboxName=%MAILACCOUNT%
+HomeServer=%MAILSERVER%
+AccountName=Microsoft Exchange Server
+
+[ServiceEGS]
+MailboxName=%MAILACCOUNT%
+HomeServer=%MAILSERVER%
+;***************************************************************
+; Section 5 - Values for each internet account.
+;***************************************************************
+
+;***************************************************************
+; Section 6 - Mapping for profile properties
+;***************************************************************
+
+[Microsoft Exchange Server]
+ServiceName=MSEMS
+MDBGUID=5494A1C0297F101BA58708002B2A2517
+MailboxName=PT_STRING8,0x6607
+HomeServer=PT_STRING8,0x6608
+OfflineAddressBookPath=PT_STRING8,0x660E
+OfflineFolderPath=PT_STRING8,0x6610
+
+[Exchange Global Section]
+SectionGUID=13dbb0c8aa05101a9bb000aa002fc45a
+MailboxName=PT_STRING8,0x6607
+HomeServer=PT_STRING8,0x6608
+
+[Microsoft Mail]
+ServiceName=MSFS
+ServerPath=PT_STRING8,0x6600
+Mailbox=PT_STRING8,0x6601
+Password=PT_STRING8,0x67f0
+RememberPassword=PT_BOOLEAN,0x6606
+ConnectionType=PT_LONG,0x6603
+UseSessionLog=PT_BOOLEAN,0x6604
+SessionLogPath=PT_STRING8,0x6605
+EnableUpload=PT_BOOLEAN,0x6620
+EnableDownload=PT_BOOLEAN,0x6621
+UploadMask=PT_LONG,0x6622
+NetBiosNotification=PT_BOOLEAN,0x6623
+NewMailPollInterval=PT_STRING8,0x6624
+DisplayGalOnly=PT_BOOLEAN,0x6625
+UseHeadersOnLAN=PT_BOOLEAN,0x6630
+UseLocalAdressBookOnLAN=PT_BOOLEAN,0x6631
+UseExternalToHelpDeliverOnLAN=PT_BOOLEAN,0x6632
+UseHeadersOnRAS=PT_BOOLEAN,0x6640
+UseLocalAdressBookOnRAS=PT_BOOLEAN,0x6641
+UseExternalToHelpDeliverOnRAS=PT_BOOLEAN,0x6639
+ConnectOnStartup=PT_BOOLEAN,0x6642
+DisconnectAfterRetrieveHeaders=PT_BOOLEAN,0x6643
+DisconnectAfterRetrieveMail=PT_BOOLEAN,0x6644
+DisconnectOnExit=PT_BOOLEAN,0x6645
+DefaultDialupConnectionName=PT_STRING8,0x6646
+DialupRetryCount=PT_STRING8,0x6648
+DialupRetryDelay=PT_STRING8,0x6649
+
+[Personal Folders]
+ServiceName=MSPST MS
+Name=PT_STRING8,0x3001
+PathToPersonalFolders=PT_STRING8,0x6700 
+RememberPassword=PT_BOOLEAN,0x6701
+EncryptionType=PT_LONG,0x6702
+Password=PT_STRING8,0x6703
+
+[Outlook Address Book]
+ServiceName=CONTAB
+
+[LDAP Directory]
+ServiceName=EMABLT
+ServerName=PT_STRING8,0x6600
+UserName=PT_STRING8,0x6602
+UseSSL=PT_BOOLEAN,0x6613
+DisplayName=PT_STRING8,0x3001
+ConnectionPort=PT_STRING8,0x6601
+SearchTimeout=PT_STRING8,0x6607
+MaxEntriesReturned=PT_STRING8,0x6608
+SearchBase=PT_STRING8,0x6603
+
+[Microsoft Outlook Client]
+SectionGUID=0a0d020000000000c000000000000046
+FormDirectoryPage=PT_STRING8,0x0270
+WebServicesLocation=PT_STRING8,0x0271
+ComposeWithWebServices=PT_BOOLEAN,0x0272
+PromptWhenUsingWebServices=PT_BOOLEAN,0x0273
+OpenWithWebServices=PT_BOOLEAN,0x0274
+
+[Personal Address Book]
+ServiceName=MSPST AB
+NameOfPAB=PT_STRING8,0x001e3001
+Path=PT_STRING8,0x001e6600
+ShowNamesBy=PT_LONG,0x00036601
+
+; ************************************************************************
+; Section 7 - Mapping for internet account properties.  DO NOT MODIFY.
+; ************************************************************************
+
+[I_Mail]
+AccountType=POP3
+;--- POP3 Account Settings ---
+AccountName=PT_UNICODE,0x0002
+DisplayName=PT_UNICODE,0x000B
+EmailAddress=PT_UNICODE,0x000C
+;--- POP3 Account Settings ---
+POP3Server=PT_UNICODE,0x0100
+POP3UserName=PT_UNICODE,0x0101
+POP3UseSPA=PT_LONG,0x0108
+Organization=PT_UNICODE,0x0107
+ReplyEmailAddress=PT_UNICODE,0x0103
+POP3Port=PT_LONG,0x0104
+POP3UseSSL=PT_LONG,0x0105
+; --- SMTP Account Settings ---
+SMTPServer=PT_UNICODE,0x0200
+SMTPUseAuth=PT_LONG,0x0203
+SMTPAuthMethod=PT_LONG,0x0208
+SMTPUserName=PT_UNICODE,0x0204
+SMTPUseSPA=PT_LONG,0x0207
+ConnectionType=PT_LONG,0x000F
+ConnectionOID=PT_UNICODE,0x0010
+SMTPPort=PT_LONG,0x0201
+SMTPUseSSL=PT_LONG,0x0202
+ServerTimeOut=PT_LONG,0x0209
+LeaveOnServer=PT_LONG,0x1000
+
+[IMAP_I_Mail]
+AccountType=IMAP
+;--- IMAP Account Settings ---
+AccountName=PT_UNICODE,0x0002
+DisplayName=PT_UNICODE,0x000B
+EmailAddress=PT_UNICODE,0x000C
+;--- IMAP Account Settings ---
+IMAPServer=PT_UNICODE,0x0100
+IMAPUserName=PT_UNICODE,0x0101
+IMAPUseSPA=PT_LONG,0x0108
+Organization=PT_UNICODE,0x0107
+ReplyEmailAddress=PT_UNICODE,0x0103
+IMAPPort=PT_LONG,0x0104
+IMAPUseSSL=PT_LONG,0x0105
+; --- SMTP Account Settings ---
+SMTPServer=PT_UNICODE,0x0200
+SMTPUseAuth=PT_LONG,0x0203
+SMTPAuthMethod=PT_LONG,0x0208
+SMTPUserName=PT_UNICODE,0x0204
+SMTPUseSPA=PT_LONG,0x0207
+ConnectionType=PT_LONG,0x000F
+ConnectionOID=PT_UNICODE,0x0010
+SMTPPort=PT_LONG,0x0201
+SMTPUseSSL=PT_LONG,0x0202
+ServerTimeOut=PT_LONG,0x0209
+CheckNewImap=PT_LONG,0x1100
+RootFolder=PT_UNICODE,0x1101
+
+[INET_HTTP]
+AccountType=HOTMAIL
+Account=PT_UNICODE,0x0002
+HttpServer=PT_UNICODE,0x0100
+UserName=PT_UNICODE,0x0101
+Organization=PT_UNICODE,0x0107
+UseSPA=PT_LONG,0x0108
+TimeOut=PT_LONG,0x0209
+Reply=PT_UNICODE,0x0103
+EmailAddress=PT_UNICODE,0x000C
+FullName=PT_UNICODE,0x000B
+Connection Type=PT_LONG,0x000F
+ConnectOID=PT_UNICODE,0x0010
+

@@ -1,0 +1,118 @@
+'=====================================================================
+'
+'  File:     SetRSSecurity.rss
+'
+'  Based on file AddItemSecurity.rss from the SQL Server Samples collection
+'
+'  Copyright © 2009 Edward Vassie.  Distributed under Ms-Pl License
+'
+'  Summary:  Demonstrates a script that can be used with RS.exe to 
+'                set security on an item in Reporting Services.
+'
+'---------------------------------------------------------------------
+'
+' THIS CODE AND INFORMATION ARE PROVIDED "AS IS" WITHOUT WARRANTY OF ANY
+'
+' KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+'
+' IMPLIED WARRANTIES OF MERCHANTABILITY AND/OR FITNESS FOR A
+'
+' PARTICULAR PURPOSE.
+'
+'=====================================================================*/
+'
+'
+' Variables that are passed on the command line with the -v switch:
+'
+' userName - the name of the user for which to add a policy
+'
+' roleName - the name of the role to apply for the user (i.e. Browser, Content Manager)
+'
+' keepCurrentPolicy - whether to keep the current policy and add the new one
+'
+' Sample command line: 
+'
+' rs -i AddItemSecurity.rss -s http://localhost/reportserver -v userName="MyTestUser" 
+'    -v roleName="Browser" -v keepCurrentPolicy="True"
+
+Public Sub Main()
+
+   Dim inheritParent As Boolean
+
+   Dim policies() As Policy
+
+   Dim newPolicies() As Policy
+
+   Dim policy As New Policy()
+
+   Dim roles(0) As Role
+
+   roles(0) = New Role()
+
+   roles(0).Name = roleName
+
+   policy.Roles = roles
+
+   policy.GroupUserName = userName
+
+   Select Case True
+     Case roleName.ToUpper = "SYSTEM ADMINISTRATOR"
+       policies = rs.GetSystemPolicies()
+     Case roleName.ToUpper = "SYSTEM USER"
+       policies = rs.GetSystemPolicies()
+     Case Else
+       policies = rs.GetPolicies("/", inheritParent)
+   End Select
+        
+
+   ' If the user selects not to keep inherited or current policy,
+   ' empty the policy
+
+   If Not keepCurrentPolicy = "True" Then
+     policies = Nothing
+   End If 
+
+   newPolicies = AddNewPolicy(policy, policies)
+
+   Select Case True
+     Case roleName.ToUpper = "SYSTEM ADMINISTRATOR"
+       rs.SetSystemPolicies(newPolicies)
+     Case roleName.ToUpper = "SYSTEM USER"
+       rs.SetSystemPolicies(newPolicies)
+     Case Else
+       rs.SetPolicies("/", newPolicies)
+   End Select
+
+   Console.WriteLine("Policy successfully set.")
+
+End Sub 'Main
+   
+
+Private Function AddNewPolicy(policyToAdd As Policy, policies() As Policy) As Policy()
+' Takes the policy to add and applies it to the current set
+' of policies if applicable
+
+   If Not (policies Is Nothing) Then
+
+      Dim policy As Policy
+
+      For Each policy In  policies
+
+         If policy.GroupUserName = policyToAdd.GroupUserName Then
+           Throw New Exception("The supplied User policy already exists for the item.")
+         End If
+
+      Next policy 
+
+      Dim list As New System.Collections.ArrayList(policies)
+      list.Add(policyToAdd)
+      Return CType(list.ToArray(GetType(Policy)), Policy())
+
+   Else
+      policies = New Policy(0) {}
+      policies(0) = policyToAdd
+      Return policies
+   End If
+
+End Function 'AddNewPolicy
+

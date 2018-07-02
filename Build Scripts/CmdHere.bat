@@ -1,1 +1,3 @@
-ECHO Contents of Build Scripts folder not yet uploaded
+@echo off
+Title FineBuild Command Prompt
+cmd /k pushd %~dp0
