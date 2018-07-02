@@ -12,12 +12,13 @@ SET SQLFBCMD=%~f0
 SET SQLFBPARM=%*
 SET SQLFBFOLDER=%~dp0
 FOR /F "usebackq tokens=*" %%X IN (`CHDIR`) DO (SET SQLFBSTART=%%X)
+SET SQLLOGTXT=
 SET SQLRC=0
 SET SQLPROCESSID=
 SET SQLTYPE=
 SET SQLUSERVBS=
-CALL "%SQLFBFOLDER%\Build Scripts\Set-FBVersion"
 IF '%SQLVERSION%' == '' SET SQLVERSION=SQL2014
+CALL "%SQLFBFOLDER%\Build Scripts\Set-FBVersion"
 
 PUSHD "%SQLFBFOLDER%"
 
@@ -38,8 +39,8 @@ ECHO Run on %COMPUTERNAME% by %USERNAME% at %TIME:~0,8% on %DATE%:
 ECHO %0 %SQLFBPARM%
 
 ECHO.
-ECHO ******************************************************
-ECHO %TIME:~0,8% FineBuild Configuration starting
+ECHO ************************************************************
+ECHO %TIME:~0,8% *********** FineBuild Configuration starting
 
 %SQLFBDEBUG% %TIME:~0,8% Prepare Log file
 FOR /F "usebackq tokens=*" %%X IN (`CSCRIPT //nologo "%SQLFBFOLDER%\Build Scripts\FBConfigVar.vbs" /VarName:LogFile %SQLFBPARM%`) DO (SET SQLLOGTXT=%%X)
@@ -78,29 +79,25 @@ IF %SQLRC% NEQ 0 ECHO Process Type var failed
 IF %SQLRC% NEQ 0 GOTO :ERROR
 
 %SQLFBDEBUG% %TIME:~0,8% Build FineBuild Configuration
-CSCRIPT //nologo "%SQLFBFOLDER%\Build Scripts\FBConfigBuild.vbs" %SQLFBPARM% %SQLDEBUG% >> %SQLLOGTXT%
+CSCRIPT //nologo "%SQLFBFOLDER%\Build Scripts\FBConfigBuild.vbs" %SQLFBPARM% %SQLDEBUG%
 SET SQLRC=%ERRORLEVEL%
 IF %SQLRC% NEQ 0 GOTO :ERROR
 
 %SQLFBDEBUG% %TIME:~0,8% Report FineBuild Configuration
-CSCRIPT //nologo "%SQLFBFOLDER%\Build Scripts\FBConfigReport.vbs" %SQLDEBUG% >> %SQLLOGTXT%
+CSCRIPT //nologo "%SQLFBFOLDER%\Build Scripts\FBConfigReport.vbs" %SQLDEBUG%
 SET SQLRC=%ERRORLEVEL%
 IF %SQLRC% NEQ 0 GOTO :ERROR
 
-ECHO %TIME:~0,8% FineBuild Configuration completed with code %SQLRC%
 IF '%SQLPROCESSID%' GTR 'R2' GOTO :Refresh
 IF '%SQLPROCESSID%' NEQ '' GOTO :%SQLPROCESSID%
 
 :R1
-ECHO.
-ECHO ******************************************************
-ECHO %TIME:~0,8% Server Preparation starting
-CSCRIPT //nologo "%SQLFBFOLDER%\Build Scripts\FineBuild1Preparation.vbs" %SQLDEBUG% >> %SQLLOGTXT%
+ECHO %TIME:~0,8% *********** Server Preparation processing
+CSCRIPT //nologo "%SQLFBFOLDER%\Build Scripts\FineBuild1Preparation.vbs" %SQLDEBUG%
 SET SQLRC=%ERRORLEVEL%
-ECHO %TIME:~0,8% Server Preparation completed with code %SQLRC%
 IF %SQLRC% NEQ 0 GOTO :ERROR
 
-ECHO %TIME:~0,8% Refreshing environment variables
+ECHO %TIME:~0,8% *********** Refreshing environment variables
 
 %SQLFBDEBUG% %TIME:~0,8% Refresh TEMP value
 FOR /F "usebackq tokens=*" %%X IN (`CSCRIPT //nologo "%SQLFBFOLDER%\Build Scripts\FBConfigVar.vbs" /VarName:Temp %SQLFBPARM% %SQLDEBUG%`) DO (SET TEMP=%%X)
@@ -111,18 +108,14 @@ IF %SQLRC% NEQ 0 GOTO :ERROR
 SET TMP=%TEMP%
 
 :R2
-ECHO.
-ECHO ******************************************************
-ECHO %TIME:~0,8% SQL Server %SQLVERSION% Install starting
-ECHO %TIME:~0,8% This process may take about 40 minutes to complete
-CSCRIPT //nologo "%SQLFBFOLDER%\Build Scripts\FineBuild2InstallSQL.vbs" %SQLDEBUG% >> %SQLLOGTXT%
+ECHO %TIME:~0,8% *********** SQL Server %SQLVERSION% Install processing
+CSCRIPT //nologo "%SQLFBFOLDER%\Build Scripts\FineBuild2InstallSQL.vbs" %SQLDEBUG%
 SET SQLRC=%ERRORLEVEL%
-ECHO %TIME:~0,8% SQL Server %SQLVERSION% Install completed with code %SQLRC%
 IF %SQLRC% NEQ 0 GOTO :ERROR
 
 :Refresh
 
-ECHO %TIME:~0,8% Refreshing environment variables
+ECHO %TIME:~0,8% *********** Refreshing environment variables
 
 %SQLFBDEBUG% %TIME:~0,8% Refresh TEMP value
 FOR /F "usebackq tokens=*" %%X IN (`CSCRIPT //nologo "%SQLFBFOLDER%\Build Scripts\FBConfigVar.vbs" /VarName:Temp %SQLFBPARM% %SQLDEBUG%`) DO (SET TEMP=%%X)
@@ -142,61 +135,45 @@ IF %SQLRC% NEQ 0 GOTO :ERROR
 IF '%SQLPROCESSID%' GTR 'R2' GOTO :%SQLPROCESSID%
 
 :R3
-ECHO.
-ECHO ******************************************************
-ECHO %TIME:~0,8% SQL Server %SQLVERSION% Fixes Install starting
-ECHO %TIME:~0,8% This process may take about 40 minutes to complete
-CSCRIPT //nologo "%SQLFBFOLDER%\Build Scripts\FineBuild3InstallFixes.vbs" %SQLDEBUG% >> %SQLLOGTXT%
+ECHO %TIME:~0,8% *********** SQL Server %SQLVERSION% Fixes processing
+CSCRIPT //nologo "%SQLFBFOLDER%\Build Scripts\FineBuild3InstallFixes.vbs" %SQLDEBUG%
 SET SQLRC=%ERRORLEVEL%
-ECHO %TIME:~0,8% SQL Server %SQLVERSION% Fixes Install completed with code %SQLRC%
 IF %SQLRC% NEQ 0 GOTO :ERROR
 IF '%SQLTYPE%' == 'FIX' GOTO :COMPLETE
 
 :R4
-ECHO.
-ECHO ******************************************************
-ECHO %TIME:~0,8% SQL Xtras Install starting
-CSCRIPT //nologo "%SQLFBFOLDER%\Build Scripts\FineBuild4InstallXtras.vbs" %SQLDEBUG% >> %SQLLOGTXT%
+ECHO %TIME:~0,8% *********** SQL Server Extras processing
+CSCRIPT //nologo "%SQLFBFOLDER%\Build Scripts\FineBuild4InstallXtras.vbs" %SQLDEBUG%
 SET SQLRC=%ERRORLEVEL%
-ECHO %TIME:~0,8% SQL Xtras Install completed with code %SQLRC%
 IF %SQLRC% NEQ 0 GOTO :ERROR
 
 :R5
-ECHO.
-ECHO ******************************************************
-ECHO %TIME:~0,8% SQL Server %SQLVERSION% Instance Configuration starting
-CSCRIPT //nologo "%SQLFBFOLDER%\Build Scripts\FineBuild5ConfigureSQL.vbs" %SQLDEBUG% >> %SQLLOGTXT%
+ECHO %TIME:~0,8% *********** SQL Server Configuration processing
+CSCRIPT //nologo "%SQLFBFOLDER%\Build Scripts\FineBuild5ConfigureSQL.vbs" %SQLDEBUG%
 SET SQLRC=%ERRORLEVEL%
-ECHO %TIME:~0,8% SQL Server %SQLVERSION% Instance Configuration completed with code %SQLRC%
 IF %SQLRC% NEQ 0 GOTO :ERROR
 
 :R6
-ECHO.
-ECHO ******************************************************
-ECHO %TIME:~0,8% User Setup starting
-CSCRIPT //nologo "%SQLFBFOLDER%\Build Scripts\FineBuild6ConfigureUsers.vbs" %SQLDEBUG% >> %SQLLOGTXT%
+ECHO %TIME:~0,8% *********** User Configuration processing
+CSCRIPT //nologo "%SQLFBFOLDER%\Build Scripts\FineBuild6ConfigureUsers.vbs" %SQLDEBUG%
 SET SQLRC=%ERRORLEVEL%
-ECHO %TIME:~0,8% User Setup completed with code %SQLRC%
 IF %SQLRC% NEQ 0 GOTO :ERROR
 
 :COMPLETE
 IF EXIST "%TEMP%\FBCMDRUN.BAT" DEL /F "%TEMP%\FBCMDRUN.BAT"
 ECHO.
-ECHO ******************************************************
+ECHO ************************************************************
 ECHO *  
-ECHO * %SQLVERSION% FineBuild Install Complete.  
+ECHO * %SQLVERSION% FineBuild Install Complete  
 ECHO *
-ECHO ******************************************************
+ECHO ************************************************************
 
 GOTO :END
 
 :RD
-ECHO.
-ECHO ******************************************************
-ECHO %TIME:~0,8% FineBuild Discovery starting
-CSCRIPT //nologo "%SQLFBFOLDER%\Build Scripts\FBConfigDiscover.vbs" %SQLDEBUG% >> %SQLLOGTXT%
+ECHO %TIME:~0,8%             SQL Configuration Discovery processing
+CSCRIPT //nologo "%SQLFBFOLDER%\Build Scripts\FBConfigDiscover.vbs" %SQLDEBUG%
 SET SQLRC=%ERRORLEVEL%
-ECHO %TIME:~0,8% User Setup completed with code %SQLRC%
 IF %SQLRC% NEQ 0 GOTO :ERROR
 
 GOTO :END
@@ -218,11 +195,11 @@ GOTO :END
 :REBOOT
 
 ECHO.
-ECHO ******************************************************
+ECHO ************************************************************
 ECHO *  
-ECHO * %SQLVERSION% FineBuild ******* REBOOT IN PROGRESS *******  
+ECHO * %SQLVERSION% FineBuild  ********** REBOOT IN PROGRESS **********  
 ECHO *
-ECHO ******************************************************
+ECHO ************************************************************
 
 GOTO :END
 
@@ -240,20 +217,20 @@ GOTO :EXIT
 :END
 
 %SQLFBDEBUG% %TIME:~0,8% Report FineBuild Configuration
-CSCRIPT //nologo "%SQLFBFOLDER%\Build Scripts\FBConfigReport.vbs" %SQLDEBUG% >> %SQLLOGTXT%
+CSCRIPT //nologo "%SQLFBFOLDER%\Build Scripts\FBConfigReport.vbs" %SQLDEBUG%
 
 %SQLFBDEBUG% %TIME:~0,8% Display FineBuild Configuration Report
 CSCRIPT //nologo "%SQLFBFOLDER%\Build Scripts\FBConfigVar.vbs" /VarName:ReportView
 POPD
 
 ECHO.
-ECHO ******************************************************
+ECHO ************************************************************
 ECHO *                                           
 ECHO * %0 process completed with code %SQLRC%   
 ECHO *
 ECHO * Log file in %SQLLOGTXT%
 ECHO *                                           
-ECHO ******************************************************
+ECHO ************************************************************
 
 GOTO :EXIT
 
