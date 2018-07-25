@@ -290,7 +290,7 @@ Private Function GetClusterIPAddress(strClusterName, strClusType, strIPType, str
 End Function
 
 
-Private Function GetAddress(strAddress, strFormat, strPreserve)
+Function GetAddress(strAddress, strFormat, strPreserve)
   Call DebugLog("GetAddress: " & strAddress)
   Dim arrReadAll
   Dim colAddrs
@@ -633,6 +633,10 @@ End Sub
 Sub SetOwnerNode(strCluster)
   Call FBManageCluster.SetOwnerNode(strCluster)
 End Sub
+
+Function GetAddress(strAddress, strFormat, strPreserve)
+  GetAddress = FBManageCluster.GetAddress(strAddress, strFormat, strPreserve)
+End Function
 
 Function GetClusterIPAddresses(strClusterGroup, strClusterType, strAddressFormat)
   GetClusterIPAddresses = FBManageCluster.GetClusterIPAddresses(strClusterGroup, strClusterType, strAddressFormat)

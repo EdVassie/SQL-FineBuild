@@ -19,7 +19,7 @@ Option Explicit
 Dim FBManageLog: Set FBManageLog = New FBManageLogClass
 
 Dim objLogFile
-Dim strDebug, strDebugDesc, strDebugMsg1, strDebugMsg2
+Dim strCmd, strDebug, strDebugDesc, strDebugMsg1, strDebugMsg2
 Dim strMsgError, strMsgWarning, strMsgInfo
 Dim strProcessId, strProcessIdCode, strProcessIdDesc, strProcessIdLabel
 Dim strSetupLog, strStatusBypassed, strStatusComplete, strStatusFail, strStatusManual, strStatusPreConfig, strStatusProgress
@@ -95,6 +95,58 @@ Function CheckStatus(strInstName)
 End Function
 
 
+Sub LogClose()
+  Call DebugLog("LogClose:")
+  Dim intIdx
+  Dim strNumLogins
+
+  Call HideBuildPassword("AdminPassword")
+  Call HideBuildPassword("AgtPassword")
+  Call HideBuildPassword("AsPassword")
+  Call HideBuildPassword("CmdShellPassword")
+  Call HideBuildPassword("DistPassword")
+  Call HideBuildPassword("DQPassword")
+  Call HideBuildPassword("DRUCtlrPassword")
+  Call HideBuildPassword("DRUCltPassword")
+  Call HideBuildPassword("DRUCltPassword")
+  Call HideBuildPassword("ExtSvcPassword")
+  Call HideBuildPassword("FarmPassword")
+  Call HideBuildPassword("FtPassword")
+  Call HideBuildPassword("Passphrase")
+  Call HideBuildPassword("PID")
+  Call HideBuildPassword("PowerBIPID")
+  Call HideBuildPassword("MDSPassword")
+  Call HideBuildPassword("MDWPassword")
+  Call HideBuildPassword("IsPassword")
+  Call HideBuildPassword("IsMasterPassword")
+  Call HideBuildPassword("IsMasterThumbprint")
+  Call HideBuildPassword("IsWorkerPassword")
+  Call HideBuildPassword("PBDMSSvcPassword")
+  Call HideBuildPassword("PBEngSvcPassword")
+  Call HideBuildPassword("RsPassword")
+  Call HideBuildPassword("RSDBPassword")
+  Call HideBuildPassword("RsExecPassword")
+  Call HideBuildPassword("RsSharePassword")
+  Call HideBuildPassword("RsUpgradePassword")
+  Call HideBuildPassword("saPwd")
+  Call HideBuildPassword("SqlPassword")
+  Call HideBuildPassword("SqlBrowserPassword")
+  Call HideBuildPassword("SSISPassword")
+  Call HideBuildPassword("StreamInsightPID")
+  Call HideBuildPassword("TelSvcPassword")
+
+  strNumLogins      = GetBuildfileValue("NumLogins")
+  For intIdx = 1 to strNumLogins
+    Call HideBuildPassword("UserPassword" & Right("0" & CStr(intIdx), 2))
+  Next
+
+  strCmd            = HidePasswords(GetBuildFileValue("FBParm"))
+  Call SetBuildfileValue("FBParm",             strCmd)
+  Call SetBuildfileValue("FBParmOld",          "")
+
+End Sub
+
+
 Private Function LogFormat(strLogText, strDest)
   Dim strId, strLogFormat
 
@@ -154,6 +206,16 @@ Private Sub LogWrite(strLogText)
   Set objLogStream  = objLogFile.OpenAsTextStream(8, -2)
   objLogStream.WriteLine LogFormat(strLogText, "F")
   objLogStream.Close
+
+End Sub
+
+
+Private Sub HideBuildPassword(strName)
+
+  strCmd            = GetBuildFileValue(strName)
+  If strCmd <> "" Then 
+    Call SetBuildfileValue(strName, "********")
+  End If 
 
 End Sub
 
@@ -271,6 +333,10 @@ End Function
 Function HidePasswords(strText)
   HidePasswords     = FBManageLog.HidePasswords(strText)
 End Function
+
+Sub LogClose()
+  Call FBManageLog.LogClose()
+End Sub
 
 Sub SetProcessId(strLabel, strDesc)
   Call FBManageLog.SetProcessId(strLabel, strDesc)

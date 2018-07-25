@@ -66,8 +66,13 @@ Sub RunInstall(strInstName, strInstFile, objInstParm)
   strInstallError   = UCase(GetXMLParm(objInstParm, "InstallError",  strMsgWarning))
   strLogXtra        = UCase(Replace(GetXMLParm(objInstParm, "LogXtra", "")," ", ""))
   strMenuOption     = UCase(GetXMLParm(objInstParm, "MenuOption", ""))
-  strStatusOption   = GetXMLParm(objInstParm, "StatusOption", strStatusComplete)
   strStatusVar      = "Setup" & strInstName & strLogXtra & "Status"
+  Select Case True
+    Case strLogXtra = ""
+      strStatusOption = GetXMLParm(objInstParm, "StatusOption", strStatusComplete)
+    Case Else
+      strStatusOption = GetXMLParm(objInstParm, "StatusOption", strStatusProgress)
+  End Select
   Call SetBuildFileValue(strStatusVar, strStatusProgress)
 
   Select Case True
