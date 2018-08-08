@@ -8,4 +8,4 @@ The files for each release of SQL Server are found in the _SQL2017_, _SQL2016_, 
 
 To prepare the v3.4.2 code for use, download the relevant folder for your version of SQL Server, then download the _Build Scripts_ folder and copy it into the _\FineBuild_ folder.  
 
-Documentation is found on the [SQL FineBuild Wiki](https://github.com/SQL-FineBuild/Common/wiki).
+Documentation is found on the [SQL FineBuild Wiki](https://github.com/SQL-FineBuild/Common/wiki).  Issues shoud be logged in the [Issues List](https://github.com/SQL-FineBuild/Common/issues).
