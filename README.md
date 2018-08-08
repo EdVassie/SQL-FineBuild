@@ -6,4 +6,4 @@ The best way to get SQL FineBuild is to download one of the prepared .zip files 
 
 Alternatively, to prepare the code for use, download the relevant folder for your version of SQL Server, then download the _Build Scripts_ folder and copy it into the _\FineBuild_ folder.  
 
-Documentation is found on the [SQL FineBuild Wiki](https://github.com/SQL-FineBuild/Common/wiki).
+Documentation is found on the [SQL FineBuild Wiki](https://github.com/SQL-FineBuild/Common/wiki).  Issues shoud be logged in the [Issues List](https://github.com/SQL-FineBuild/Common/issues).
