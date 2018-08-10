@@ -6,7 +6,7 @@ This file explains the contents of the \FineBuild folder
 For more information please see the SQL FineBuild Wiki: https://github.com/SQL-FineBuild/Common/wiki
 
 All of the Example files need the following parameters to be supplied at run time:
-/Edition:	  The SQL Server Edition (Standard, Enterprise, etc) you want to install
+/Edition:	    The SQL Server Edition (Standard, Enterprise, etc) you want to install
 /AdminPassword:	Your own password.  This allows SQL FineBuild to log on automatically after a reboot
 
 FineBuild folder contents:
