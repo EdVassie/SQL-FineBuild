@@ -1,5 +1,5 @@
 SQL FineBuild ReadMe file
-Copyright FineBuild Team © 2018.  Distributed under Ms-Pl License
+Copyright FineBuild Team Â© 2018.  Distributed under Ms-Pl License
 
 This file explains the contents of the \FineBuild folder
 
@@ -7,7 +7,7 @@ For more information please see the SQL FineBuild Wiki: https://github.com/SQL-F
 
 All of the Example files need the following parameters to be supplied at run time:
 /Edition:	The SQL Server Edition (Standard, Enterprise, etc) you want to install
-/AdminPassword:	Your own password.  This allows SQL FineBuild tyo log on automatically after a reboot
+/AdminPassword:	Your own password.  This allows SQL FineBuild to log on automatically after a reboot
 
 FineBuild folder contents:
 
