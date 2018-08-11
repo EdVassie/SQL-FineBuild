@@ -252,7 +252,7 @@ Function GetClusterIPAddresses(strClusterGroup, strClusterType, strAddressFormat
   End If
 
   If strClusterIPExtra <> "" Then
-    strFailoverClusterIPAddresses = strFailoverClusterIPAddresses & ";" & strClusterIPExtra
+    strFailoverClusterIPAddresses = strFailoverClusterIPAddresses & " " & strClusterIPExtra
   End If
 
   Call SetBuildfileValue("ClusterIPV4" & strClusterType, strClusterIPV4)
