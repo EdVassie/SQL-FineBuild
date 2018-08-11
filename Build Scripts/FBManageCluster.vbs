@@ -234,9 +234,10 @@ End Sub
 
 Function GetClusterIPAddresses(strClusterGroup, strClusterType, strAddressFormat)
   Call DebugLog("GetClusterIPAddresses: " & strClusterGroup)
-  Dim strFailoverClusterIPAddresses, strClusterIPV4, strClusterIPV6
+  Dim strFailoverClusterIPAddresses, strClusterIPExtra, strClusterIPV4, strClusterIPV6
 
   strFailoverClusterIPAddresses = ""
+  strClusterIPExtra             = GetBuildfileValue("Clus" & strClusType & "IPExtra)"
   strClusterIPV4                = ""
   strClusterIPV6                = ""
 
@@ -248,6 +249,10 @@ Function GetClusterIPAddresses(strClusterGroup, strClusterType, strAddressFormat
   If strClusIPV6Network <> "" Then
     strClusterIPV6  = GetClusterIPAddress(strClusterGroup, strClusterType, "IPv6", strAddressFormat)
     strFailoverClusterIPAddresses = strFailoverClusterIPAddresses & strClusterIPV6
+  End If
+
+  If strClusterIPExtra <> "" Then
+    strFailoverClusterIPAddresses = strFailoverClusterIPAddresses & ";" & strClusterIPExtra
   End If
 
   Call SetBuildfileValue("ClusterIPV4" & strClusterType, strClusterIPV4)
