@@ -9,3 +9,5 @@ Alternatively, download the relevant folder for your version of SQL Server, then
 The files for each release of SQL Server are found in the _SQL2017_, _SQL2016_, etc folders.  The _Build Scripts_ folder is common to all releases and is in a separate folder.
 
 Documentation is found on the [SQL FineBuild Wiki](https://github.com/SQL-FineBuild/Common/wiki).  Issues shoud be logged in the [Issues List](https://github.com/SQL-FineBuild/Common/issues).
+
+[![Visitor Count](https://clustrmaps.com/map_v2.png?cl=d6edc7&w=a&t=tt&d=cWNsgFXGGzwDH3YY_7RenbFLUXkn0NOe2fKT8GW8dQ8&co=3683ba)](https://clustrmaps.com/site/1abpj)
