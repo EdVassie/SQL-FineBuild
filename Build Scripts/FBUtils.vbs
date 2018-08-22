@@ -315,6 +315,9 @@ Sub SetParam(strParamName, strParam, strNewValue, strMessage, ByRef strList)
       ' Nothing
     Case (strParam = "NO") And (strNewValue = "N/A")
       strParam      = strNewValue
+    Case (strParam = "") And (strNewValue = "YES") And (strMessage = "")
+      strParam      = strNewValue
+      strList       = strList & " " & strParamName
     Case strParam = ""
       strParam      = strNewValue
     Case strBuildValue = strNewValue
