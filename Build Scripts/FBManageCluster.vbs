@@ -547,6 +547,9 @@ Private Function MoveClusterCSV(strClusterGroup, strVolParam)
   For intIdx = 0 To intUBound
     strVol          = arrItems(intIdx)
     strVol          = Mid(strVol, Len(strCSVRoot) + 1)
+    If Instr(strVol, "\") > 0 Then
+      strVol        = Left(strVol, Instr(strVol, "\") - 1)
+    End If
     strVolName      = GetBuildFileValue("Vol_" & UCase(strVol) & "Name")
     Select Case True
       Case Instr(strFailoverClusterDisks, """" & strVol & """") > 0
