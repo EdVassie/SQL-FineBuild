@@ -92,7 +92,7 @@ IF '%SQLPROCESSID%' GTR 'R2' GOTO :Refresh
 IF '%SQLPROCESSID%' NEQ '' GOTO :%SQLPROCESSID%
 
 :R1
-ECHO %TIME:~0,8% *********** Server Preparation processing
+ECHO %TIME:~0,8% *********** %SQLVERSION% Preparation processing
 CSCRIPT //nologo "%SQLFBFOLDER%\Build Scripts\FineBuild1Preparation.vbs" %SQLDEBUG%
 SET SQLRC=%ERRORLEVEL%
 IF %SQLRC% NEQ 0 GOTO :ERROR
@@ -108,7 +108,7 @@ IF %SQLRC% NEQ 0 GOTO :ERROR
 SET TMP=%TEMP%
 
 :R2
-ECHO %TIME:~0,8% *********** SQL Server %SQLVERSION% Install processing
+ECHO %TIME:~0,8% *********** %SQLVERSION% Install processing
 CSCRIPT //nologo "%SQLFBFOLDER%\Build Scripts\FineBuild2InstallSQL.vbs" %SQLDEBUG%
 SET SQLRC=%ERRORLEVEL%
 IF %SQLRC% NEQ 0 GOTO :ERROR
@@ -135,26 +135,26 @@ IF %SQLRC% NEQ 0 GOTO :ERROR
 IF '%SQLPROCESSID%' GTR 'R2' GOTO :%SQLPROCESSID%
 
 :R3
-ECHO %TIME:~0,8% *********** SQL Server %SQLVERSION% Fixes processing
+ECHO %TIME:~0,8% *********** %SQLVERSION% Fixes processing
 CSCRIPT //nologo "%SQLFBFOLDER%\Build Scripts\FineBuild3InstallFixes.vbs" %SQLDEBUG%
 SET SQLRC=%ERRORLEVEL%
 IF %SQLRC% NEQ 0 GOTO :ERROR
 IF '%SQLTYPE%' == 'FIX' GOTO :COMPLETE
 
 :R4
-ECHO %TIME:~0,8% *********** SQL Server Extras processing
+ECHO %TIME:~0,8% *********** %SQLVERSION% Xtras processing
 CSCRIPT //nologo "%SQLFBFOLDER%\Build Scripts\FineBuild4InstallXtras.vbs" %SQLDEBUG%
 SET SQLRC=%ERRORLEVEL%
 IF %SQLRC% NEQ 0 GOTO :ERROR
 
 :R5
-ECHO %TIME:~0,8% *********** SQL Server Configuration processing
+ECHO %TIME:~0,8% *********** %SQLVERSION% Configuration processing
 CSCRIPT //nologo "%SQLFBFOLDER%\Build Scripts\FineBuild5ConfigureSQL.vbs" %SQLDEBUG%
 SET SQLRC=%ERRORLEVEL%
 IF %SQLRC% NEQ 0 GOTO :ERROR
 
 :R6
-ECHO %TIME:~0,8% *********** User Configuration processing
+ECHO %TIME:~0,8% *********** User Setup processing
 CSCRIPT //nologo "%SQLFBFOLDER%\Build Scripts\FineBuild6ConfigureUsers.vbs" %SQLDEBUG%
 SET SQLRC=%ERRORLEVEL%
 IF %SQLRC% NEQ 0 GOTO :ERROR
