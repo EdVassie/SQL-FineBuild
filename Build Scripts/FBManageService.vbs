@@ -20,7 +20,7 @@ Dim FBManageService: Set FBManageService = New FBManageServiceClass
 
 Class FBManageServiceClass
   Dim objFile, objFolder, objFSO, objShell
-  Dim strActionSQLAS, strActionSQLDB, strActionSQLRS, strCmd, strClusterName, strResSuffix, strSetupSQLAS, strSetupSQLDB, strSetupSQLDBCluster, strSetupSQLRS, strSetupSQLRSCluster, strWaitLong, strWaitShort
+  Dim strActionSQLAS, strActionSQLDB, strActionSQLRS, strCmd, strClusterName, strInstance, strResSuffixAS, strResSuffixDB, strSetupSQLAS, strSetupSQLDB, strSetupSQLDBCluster, strSetupSQLRS, strSetupSQLRSCluster, strWaitLong, strWaitShort
 
 
 Private Sub Class_Initialize
@@ -33,7 +33,9 @@ Private Sub Class_Initialize
   strActionSQLDB    = GetBuildfileValue("ActionSQLDB")
   strActionSQLRS    = GetBuildfileValue("ActionSQLRS")
   strClusterName    = GetBuildfileValue("ClusterName")
-  strResSuffix      = GetBuildfileValue("ResSuffix")
+  strInstance       = GetBuildfileValue("Instance")
+  strResSuffixAS    = GetBuildfileValue("ResSuffixAS")
+  strResSuffixDB    = GetBuildfileValue("ResSuffixDB")
   strSetupSQLAS     = GetBuildfileValue("SetupSQLAS")
   strSetupSQLDB     = GetBuildfileValue("SetupSQLDB")
   strSetupSQLDBCluster = GetBuildfileValue("SetupSQLDBCluster")
@@ -58,7 +60,7 @@ Sub StopSQL()
     Case strSetupSQLDBCluster <> "YES"
       Call Util_RunExec("NET STOP " & GetBuildfileValue("InstAgent"), "", "", 2)
     Case Else
-      strCmd        = "CLUSTER """ & strClusterName & """ RESOURCE ""SQL Server Agent" & strResSuffix & """ /OFF"
+      strCmd        = "CLUSTER """ & strClusterName & """ RESOURCE ""SQL Server Agent" & strResSuffixDB & """ /OFF"
       Call Util_RunExec(strCmd, "", "", 0)
   End Select
 
@@ -76,7 +78,7 @@ Sub StopSQLServer()
     Case strSetupSQLDBCluster <> "YES"
       Call Util_RunExec("NET STOP " & GetBuildfileValue("InstAnal"), "", "", 2)
     Case Else
-      strCmd        = "CLUSTER """ & strClusterName & """ RESOURCE ""SQL Server Launchpad" & strResSuffix & """ /OFF"
+      strCmd        = "CLUSTER """ & strClusterName & """ RESOURCE ""SQL Server Launchpad (" & strInstance & ")"" /OFF"
       Call Util_RunExec(strCmd, "", "", 0)
   End Select
 
@@ -86,7 +88,7 @@ Sub StopSQLServer()
     Case strSetupSQLDBCluster <> "YES"
       Call Util_RunExec("%COMSPEC% /D /C NET STOP " & GetBuildfileValue("InstSQL") & " /Y", "", "", 2)
     Case Else
-      strCmd        = "CLUSTER """ & strClusterName & """ RESOURCE ""SQL Server" & strResSuffix & """ /OFF"
+      strCmd        = "CLUSTER """ & strClusterName & """ RESOURCE ""SQL Server" & strResSuffixDB & """ /OFF"
       Call Util_RunExec(strCmd, "", "", -1)
   End Select
 
@@ -103,7 +105,7 @@ Sub StartSQL()
       Call Util_RunExec("NET START " & GetBuildfileValue("InstSQL"), "", "", 2)
       Call CheckSQLReady()
     Case Else
-      strCmd        = "CLUSTER """ & strClusterName & """ RESOURCE ""SQL Server" & GetBuildfileValue("ResSuffix") & """ /ON"
+      strCmd        = "CLUSTER """ & strClusterName & """ RESOURCE ""SQL Server" & strResSuffixDB & """ /ON"
       Call Util_RunExec(strCmd, "", "", 0)
       If GetBuildfileValue("Instance") <> "MSSQLSERVER" Then
         strCmd      = "NET START ""SQLBrowser"""
@@ -217,7 +219,7 @@ Sub StopSSAS()
     Case GetBuildfileValue("SetupSQLASCluster") <> "YES"
       Call Util_RunExec("NET STOP " & GetBuildfileValue("InstAS"), "", "", 2)
     Case Else
-      strCmd        = "CLUSTER """ & strClusterName & """ RESOURCE ""Analysis Services" & GetBuildfileValue("ResSuffixAS") & """ /OFF"
+      strCmd        = "CLUSTER """ & strClusterName & """ RESOURCE ""Analysis Services" & strResSuffixAS & """ /OFF"
       Call Util_RunExec(strCmd, "", "", 0)
   End Select
 

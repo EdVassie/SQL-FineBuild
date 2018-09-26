@@ -234,9 +234,10 @@ End Sub
 
 Function GetClusterIPAddresses(strClusterGroup, strClusterType, strAddressFormat)
   Call DebugLog("GetClusterIPAddresses: " & strClusterGroup)
-  Dim strFailoverClusterIPAddresses, strClusterIPV4, strClusterIPV6
+  Dim strFailoverClusterIPAddresses, strClusterIPExtra, strClusterIPV4, strClusterIPV6
 
   strFailoverClusterIPAddresses = ""
+  strClusterIPExtra             = GetBuildfileValue("Clus" & strClusterType & "IPExtra")
   strClusterIPV4                = ""
   strClusterIPV6                = ""
 
@@ -248,6 +249,10 @@ Function GetClusterIPAddresses(strClusterGroup, strClusterType, strAddressFormat
   If strClusIPV6Network <> "" Then
     strClusterIPV6  = GetClusterIPAddress(strClusterGroup, strClusterType, "IPv6", strAddressFormat)
     strFailoverClusterIPAddresses = strFailoverClusterIPAddresses & strClusterIPV6
+  End If
+
+  If strClusterIPExtra <> "" Then
+    strFailoverClusterIPAddresses = strFailoverClusterIPAddresses & " " & strClusterIPExtra
   End If
 
   Call SetBuildfileValue("ClusterIPV4" & strClusterType, strClusterIPV4)
@@ -542,6 +547,9 @@ Private Function MoveClusterCSV(strClusterGroup, strVolParam)
   For intIdx = 0 To intUBound
     strVol          = arrItems(intIdx)
     strVol          = Mid(strVol, Len(strCSVRoot) + 1)
+    If Instr(strVol, "\") > 0 Then
+      strVol        = Left(strVol, Instr(strVol, "\") - 1)
+    End If
     strVolName      = GetBuildFileValue("Vol_" & UCase(strVol) & "Name")
     Select Case True
       Case Instr(strFailoverClusterDisks, """" & strVol & """") > 0

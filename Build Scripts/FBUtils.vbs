@@ -86,6 +86,8 @@ Function FormatFolder(strFolder)
   strFBRemote       = GetBuildfileValue("FBPathRemote")
 
   Select Case True
+    Case strFolder = ""
+      strFolderPath = ""
     Case Mid(strFolder, 2, 1) = ":"
       strFolderPath = strFolder
     Case Left(strFolder, 2) = "\\"
@@ -315,6 +317,9 @@ Sub SetParam(strParamName, strParam, strNewValue, strMessage, ByRef strList)
       ' Nothing
     Case (strParam = "NO") And (strNewValue = "N/A")
       strParam      = strNewValue
+    Case (strParam = "") And (strNewValue = "YES") And (strMessage = "")
+      strParam      = strNewValue
+      strList       = strList & " " & strParamName
     Case strParam = ""
       strParam      = strNewValue
     Case strBuildValue = strNewValue
