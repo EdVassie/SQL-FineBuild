@@ -1,6 +1,6 @@
 @ECHO OFF
 REM SQL FineBuild   
-REM Copyright FineBuild Team © 2008 - 2018.  Distributed under Ms-Pl License
+REM Copyright FineBuild Team © 2008 - 2019.  Distributed under Ms-Pl License
 REM
 REM Created 30 Jun 2008 by Ed Vassie V1.0 
 
@@ -19,6 +19,7 @@ SET SQLTYPE=
 SET SQLUSERVBS=
 IF '%SQLVERSION%' == '' SET SQLVERSION=SQL2014
 CALL "%SQLFBFOLDER%\Build Scripts\Set-FBVersion"
+%WINDIR%\SYSTEM32\REGSVR32 /s VBSCRIPT.DLL
 
 PUSHD "%SQLFBFOLDER%"
 
@@ -33,7 +34,7 @@ GOTO :RUN
 %SQLFBDEBUG% %TIME:~0,8% Run the install
 ECHO.
 ECHO SQL FineBuild %SQLFBVERSION% for %SQLVERSION%
-ECHO Copyright FineBuild Team (c) 2008 - 2018.  Distributed under Ms-Pl License
+ECHO Copyright FineBuild Team (c) 2008 - 2019.  Distributed under Ms-Pl License
 ECHO SQL FineBuild Wiki: https://github.com/SQL-FineBuild/Common/wiki
 ECHO Run on %COMPUTERNAME% by %USERNAME% at %TIME:~0,8% on %DATE%:
 ECHO %0 %SQLFBPARM%
