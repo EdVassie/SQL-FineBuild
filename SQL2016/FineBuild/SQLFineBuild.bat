@@ -1,6 +1,6 @@
 @ECHO OFF
 REM SQL FineBuild   
-REM Copyright FineBuild Team © 2008 - 2018.  Distributed under Ms-Pl License
+REM Copyright FineBuild Team © 2008 - 2019.  Distributed under Ms-Pl License
 REM
 REM Created 30 Jun 2008 by Ed Vassie V1.0 
 
@@ -19,6 +19,7 @@ SET SQLTYPE=
 SET SQLUSERVBS=
 IF '%SQLVERSION%' == '' SET SQLVERSION=SQL2016
 CALL "%SQLFBFOLDER%\Build Scripts\Set-FBVersion"
+%WINDIR%\SYSTEM32\REGSVR32 /s VBSCRIPT.DLL
 
 PUSHD "%SQLFBFOLDER%"
 
@@ -33,7 +34,7 @@ GOTO :RUN
 %SQLFBDEBUG% %TIME:~0,8% Run the install
 ECHO.
 ECHO SQL FineBuild %SQLFBVERSION% for %SQLVERSION%
-ECHO Copyright FineBuild Team (c) 2008 - 2018.  Distributed under Ms-Pl License
+ECHO Copyright FineBuild Team (c) 2008 - 2019.  Distributed under Ms-Pl License
 ECHO SQL FineBuild Wiki: https://github.com/SQL-FineBuild/Common/wiki
 ECHO Run on %COMPUTERNAME% by %USERNAME% at %TIME:~0,8% on %DATE%:
 ECHO %0 %SQLFBPARM%
@@ -92,7 +93,7 @@ IF '%SQLPROCESSID%' GTR 'R2' GOTO :Refresh
 IF '%SQLPROCESSID%' NEQ '' GOTO :%SQLPROCESSID%
 
 :R1
-ECHO %TIME:~0,8% *********** Server Preparation processing
+ECHO %TIME:~0,8% *********** %SQLVERSION% Preparation processing
 CSCRIPT //nologo "%SQLFBFOLDER%\Build Scripts\FineBuild1Preparation.vbs" %SQLDEBUG%
 SET SQLRC=%ERRORLEVEL%
 IF %SQLRC% NEQ 0 GOTO :ERROR
@@ -108,7 +109,7 @@ IF %SQLRC% NEQ 0 GOTO :ERROR
 SET TMP=%TEMP%
 
 :R2
-ECHO %TIME:~0,8% *********** SQL Server %SQLVERSION% Install processing
+ECHO %TIME:~0,8% *********** %SQLVERSION% Install processing
 CSCRIPT //nologo "%SQLFBFOLDER%\Build Scripts\FineBuild2InstallSQL.vbs" %SQLDEBUG%
 SET SQLRC=%ERRORLEVEL%
 IF %SQLRC% NEQ 0 GOTO :ERROR
@@ -135,26 +136,26 @@ IF %SQLRC% NEQ 0 GOTO :ERROR
 IF '%SQLPROCESSID%' GTR 'R2' GOTO :%SQLPROCESSID%
 
 :R3
-ECHO %TIME:~0,8% *********** SQL Server %SQLVERSION% Fixes processing
+ECHO %TIME:~0,8% *********** %SQLVERSION% Fixes processing
 CSCRIPT //nologo "%SQLFBFOLDER%\Build Scripts\FineBuild3InstallFixes.vbs" %SQLDEBUG%
 SET SQLRC=%ERRORLEVEL%
 IF %SQLRC% NEQ 0 GOTO :ERROR
 IF '%SQLTYPE%' == 'FIX' GOTO :COMPLETE
 
 :R4
-ECHO %TIME:~0,8% *********** SQL Server Extras processing
+ECHO %TIME:~0,8% *********** %SQLVERSION% Xtras processing
 CSCRIPT //nologo "%SQLFBFOLDER%\Build Scripts\FineBuild4InstallXtras.vbs" %SQLDEBUG%
 SET SQLRC=%ERRORLEVEL%
 IF %SQLRC% NEQ 0 GOTO :ERROR
 
 :R5
-ECHO %TIME:~0,8% *********** SQL Server Configuration processing
+ECHO %TIME:~0,8% *********** %SQLVERSION% Configuration processing
 CSCRIPT //nologo "%SQLFBFOLDER%\Build Scripts\FineBuild5ConfigureSQL.vbs" %SQLDEBUG%
 SET SQLRC=%ERRORLEVEL%
 IF %SQLRC% NEQ 0 GOTO :ERROR
 
 :R6
-ECHO %TIME:~0,8% *********** User Configuration processing
+ECHO %TIME:~0,8% *********** User Setup processing
 CSCRIPT //nologo "%SQLFBFOLDER%\Build Scripts\FineBuild6ConfigureUsers.vbs" %SQLDEBUG%
 SET SQLRC=%ERRORLEVEL%
 IF %SQLRC% NEQ 0 GOTO :ERROR
