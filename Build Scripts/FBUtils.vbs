@@ -1,7 +1,7 @@
 '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 '
 '  FBUtils.vbs  
-'  Copyright FineBuild Team © 2017 - 2018.  Distributed under Ms-Pl License
+'  Copyright FineBuild Team © 2017 - 2019.  Distributed under Ms-Pl License
 '
 '  Purpose:      Manage the FineBuild Log File 
 '
@@ -24,7 +24,7 @@ Class FBUtilsClass
 
 Dim objAutoUpdate, objFSO, objShell, objWMIReg
 Dim colPrcEnvVars
-Dim strCmd, strCmdPS, strGroupDBA, strGroupDBANonSA, strIsInstallDBA, strPath, strServer, strSIDDistComUsers, strUserAccount
+Dim strCmd, strCmdPS, strGroupDBA, strGroupDBANonSA, strIsInstallDBA, strOSVersion, strPath, strServer, strSIDDistComUsers, strUserAccount
 Dim intIdx
 
 
@@ -45,6 +45,7 @@ Private Sub Class_Initialize
   strGroupDBA       = GetBuildfileValue("GroupDBA")
   strGroupDBANonSA  = GetBuildfileValue("GroupDBANonSA")
   strIsInstallDBA   = GetBuildfileValue("IsInstallDBA")
+  strOSVersion      = GetBuildfileValue("OSVersion")
   strServer         = GetBuildfileValue("AuditServer")
   strSIDDistComUsers  = GetBuildfileValue("SIDDistComUsers")
   strResponseNo     = GetBuildfileValue("ResponseNo")
@@ -265,7 +266,9 @@ Sub SetupFolder(strFolder)
       ' Nothing
     Case Not objFSO.FolderExists(strPathParent)
       Call SetupFolder(strPathParent)
+      Wscript.Sleep GetBuildfileValue("WaitMed")
       objFSO.CreateFolder(strPath)
+      Wscript.Sleep GetBuildfileValue("WaitShort")
     Case Else
       objFSO.CreateFolder(strPath)
       Wscript.Sleep GetBuildfileValue("WaitShort")
@@ -278,14 +281,23 @@ Sub SetDCOMSecurity(strAppId)
   Call DebugLog("SetDCOMSecurity: " & strAppId)
   Dim arrPermDCom
   Dim objHelper, objPermDCom
-  Dim strPermDCom, strSDDLDCom
+  Dim strDescription, strPermDCom, strSDDLDCom
+
+  objWMIReg.GetBinaryValue strHKCR,strAppId,"LaunchPermission",arrPermDCom
+  Select Case True
+    Case IsNull(arrPermDCom) 
+      Exit Sub
+    Case strOSVersion < "6.0"
+      Exit Sub
+  End Select
+
+  objWMIReg.GetStringValue strHKCR,strAppId,"",strDescription
+  Call DebugLog(" " & strDescription & ", Appid: " & strAppId & ", Current Perm: " & strPermDCom)  
 
   strSDDLDCom       = "(A;;CCDCLCSWRP;;;" & strSIDDistComUsers & ")"
   strPath           = "winmgmts:{impersonationLevel=impersonate}!\\" & strServer & "\ROOT\cimv2:Win32_securityDescriptorHelper"
   Set objHelper     = GetObject(strPath)
-  objWMIReg.GetBinaryValue strHKCR,strAppId,"LaunchPermission",arrPermDCom
   Call objHelper.BinarySDToSDDL(arrPermDCom, strPermDCom)
-
   intIdx            = Instr(strPermDCom, strSIDDistComUsers)
   If intIdx = 0 Then
     intIdx          = Instr(strPermDCom, "(A;;CCSW;;;BU)")
@@ -338,10 +350,9 @@ End Sub
 Sub SetRegPerm(strRegParm, strName, strAccess)
   Call DebugLog("SetRegPerm: " & strRegParm & " for " & strName)
   ' Code based on example posted by ROHAM on www.tek-tips.com/viewthread.cfm?qid=1456390
-  Dim objACE, objDACL, objSD, objSDUtil, objWMIReg
+  Dim objACE, objDACL, objSD, objSDUtil
   Dim strACEAccessAllow, strACEFullControl, strACEPropogate, strACERead, strPath, strRegKey, strSDFormatIID, strSDPathRegistry, strStatusKB933789, strTrusteeName
 
-  Set objWMIReg     = GetObject("winmgmts:{impersonationLevel=impersonate}!\\.\root\default:StdRegProv")
   strPath           = "SOFTWARE\Microsoft\Updates\Windows Server 2003\SP3\KB933789\"
   objWMIReg.GetStringValue strHKLM,strPath,"Description",strStatusKB933789
   Select Case True
@@ -399,9 +410,21 @@ Sub SetUpdate(strOnOff)
   On Error Resume Next
 
   Select Case True
-    Case strOnOff = "ON"
+    Case strOnOff <> "ON"
+      ' Nothing
+    Case strOSVersion > "6.2"
+      colPrcEnvVars("SEE_MASK_NOZONECHECKS") = 1    ' Prevent Security Warning message hanging quiet install
+      Call Util_RunExec("NET STOP wuauserv", "", "", 2)
+    Case Else
       colPrcEnvVars("SEE_MASK_NOZONECHECKS") = 1    ' Prevent Security Warning message hanging quiet install
       err.Number    = objAutoUpdate.Pause()         ' Prevent Windows Update service triggering a reboot prompt
+  End Select
+
+  Select Case True
+    Case strOnOff = "ON"
+      ' Nothing
+    Case strOSVersion > "6.2"
+      colPrcEnvVars.Remove("SEE_MASK_NOZONECHECKS") ' Allow Security Warning messages
     Case Else
       colPrcEnvVars.Remove("SEE_MASK_NOZONECHECKS") ' Allow Security Warning messages
       err.Number    =  objAutoUpdate.Resume()       ' Resume normal Window Update Service prompts

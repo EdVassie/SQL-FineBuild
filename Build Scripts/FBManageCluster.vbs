@@ -1,7 +1,7 @@
 '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 '
 '  FBManageCluster.vbs  
-'  Copyright FineBuild Team © 2018.  Distributed under Ms-Pl License
+'  Copyright FineBuild Team © 2018 - 2019.  Distributed under Ms-Pl License
 '
 '  Purpose:      Cluster Management Utilities 
 '
@@ -538,7 +538,7 @@ Private Function MoveClusterCSV(strClusterGroup, strVolParam)
   Call DebugLog("MoveClusterCSV: " & strVolParam & " for " & strClusterGroup)
   Dim arrItems
   Dim intIdx, intUBound
-  Dim strVol, strVolName, strVolList
+  Dim strVol, strVolRes, strVolList
 
   strVolList        = GetBuildfileValue(strVolParam)
   arrItems          = Split(strVolList, ",")
@@ -550,19 +550,19 @@ Private Function MoveClusterCSV(strClusterGroup, strVolParam)
     If Instr(strVol, "\") > 0 Then
       strVol        = Left(strVol, Instr(strVol, "\") - 1)
     End If
-    strVolName      = GetBuildFileValue("Vol_" & UCase(strVol) & "Name")
+    strVolRes       = GetBuildFileValue("Vol_" & UCase(strVol) & "Res")
     Select Case True
       Case Instr(strFailoverClusterDisks, """" & strVol & """") > 0
         ' Nothing
       Case Else
-        strDebugMsg1            = "Moving " & strVol & " to " & strClusterGroup
-        strFailoverClusterDisks = strFailoverClusterDisks & """" & strVol & """ "
-        strCmd      = "CLUSTER """ & strClusterName & """ RESOURCE """ & strVolName & """ /ON"
+        strDebugMsg1            = "Moving " & strVolRes & " to " & strClusterGroup
+        strFailoverClusterDisks = strFailoverClusterDisks & """" & strVolRes & """ "
+        strCmd      = "CLUSTER """ & strClusterName & """ RESOURCE """ & strVolRes & """ /ON"
         Call Util_RunExec(strCmd, "", strResponseYes, 0)
     End Select
   Next
 
-  MoveClusterCSV    = strVolName
+  MoveClusterCSV    = strVolRes
 
 End Function
 

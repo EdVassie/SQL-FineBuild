@@ -1,7 +1,7 @@
 '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 '
 '  FBManageJob.vbs  
-'  Copyright FineBuild Team © 2017.  Distributed under Ms-Pl License
+'  Copyright FineBuild Team © 2017 - 2019.  Distributed under Ms-Pl License
 '
 '  Purpose:      Manage Creation of SQL Agent and Windows Scheduler Jobs
 '
@@ -23,7 +23,7 @@ Class FBManageJobClass
 Dim objFSO, objJobSQL, objJobSQLData, objShell
 Dim strCmd, strCmdSQL, strDBA_DB, strDirBackup, strEdition, strHKLMSQL, strInstance, strInstReg
 Dim strJobCategory, strJobCmd, strJobSaAccount, strJobId, strOSVersion, strPath, strPathMaint, strReport
-Dim strServInst, strSetupSQLAgent, strSqlAccount, strSqlPassword
+Dim strServInst, strSetupSQLAgent, strSqlAccount, strSqlPassword, strSQLOperator
 
 Private Sub Class_Initialize
   Call DebugLog("FBManageJob Class_Initialize:")
@@ -43,6 +43,7 @@ Private Sub Class_Initialize
   strServInst       = GetBuildfileValue("ServInst")
   strSqlAccount     = GetBuildfileValue("SqlAccount")
   strSqlPassword    = GetBuildfileValue("SqlPassword")
+  strSQLOperator    = GetBuildfileValue("SQLOperator")
 
   Call DebugLog("Get Backup folder name")
   strPath           = strHKLMSQL & "Instance Names\SQL\" & strInstance
@@ -92,8 +93,11 @@ Sub SetupSQLJob(strJobName, strJobCategory, strReportOpt, strJobType, strStepCmd
   Call DebugLog("Setup SQL Job: " & strJobName)
 
   If strJobCategory <> "" Then
-    Call DebugLog("Setup Job Category")
     Call SetupJobCategory(strJobCategory)
+  End If
+
+  If strSQLOperator <> "" Then
+    Call SetupOperator(strSQLOperator)
   End If
 
   Call DebugLog("Delete existing job")
@@ -112,7 +116,7 @@ Sub SetupSQLJob(strJobName, strJobCategory, strReportOpt, strJobType, strStepCmd
 
   Call DebugLog("Create new job")
   strCmd            = strCmdSQL & " -Q"
-  strJobCmd         = """EXECUTE msdb.dbo.sp_add_job @job_name = N'" & strJobName & "', @owner_login_name = N'" & strJobSaAccount & "', @description = N'" & strJobName & "', @category_name = N'" & strJobCategory & "', @enabled = 1, @notify_level_email = 2, @notify_level_page = 0, @notify_level_netsend = 0, @notify_level_eventlog = 3, @delete_level= 0, @notify_email_operator_name = N'SQL Alerts'"""
+  strJobCmd         = """EXECUTE msdb.dbo.sp_add_job @job_name = N'" & strJobName & "', @owner_login_name = N'" & strJobSaAccount & "', @description = N'" & strJobName & "', @category_name = N'" & strJobCategory & "', @enabled = 1, @notify_level_email = 2, @notify_level_page = 0, @notify_level_netsend = 0, @notify_level_eventlog = 3, @delete_level= 0, @notify_email_operator_name = N'" & strSQLOperator & "'"""
   Call Util_ExecSQL(strCmd, strJobCmd, 0)
 
   Call DebugLog("Select job_id")
@@ -465,6 +469,16 @@ Private Sub SetupJobCategory(strJobCategory)
 
   strCmd            = strCmdSQL & " -Q"
   strJobCmd         = """EXECUTE msdb.dbo.sp_add_category @name = '" & strJobCategory & "'"""
+  Call Util_ExecSQL(strCmd, strJobCmd, -1)
+
+End Sub
+
+
+Private Sub SetupOperator(strOperator)
+  Call DebugLog("Setup Operator: " & strOperator)
+
+  strCmd            = strCmdSQL & " -Q"
+  strJobCmd         = """EXEC msdb.dbo.sp_add_operator @name = N'" & strOperator & "', @enabled = 1, @email_address = N'" & GetBuildfileValue("SQLEmail") & "', @category_name = N'[Uncategorized]', @weekday_pager_start_time = 80000, @weekday_pager_end_time = 180000, @saturday_pager_start_time = 80000, @saturday_pager_end_time = 180000, @sunday_pager_start_time = 80000, @sunday_pager_end_time = 180000, @pager_days = 62;"""
   Call Util_ExecSQL(strCmd, strJobCmd, -1)
 
 End Sub

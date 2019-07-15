@@ -352,6 +352,7 @@ GO
      ,@DBName         = ORIGINAL_DB_NAME()
      ,@JobId          = CASE WHEN @AppNameBase LIKE 'SQLAgent%Jobstep%' THEN Cast(Convert(binary(16), Substring(@AppNameBase, CHARINDEX('(Job 0x', @AppNameBase) + 5, 34), 1) as uniqueidentifier) END
      ,@AppName        = CASE WHEN @AppNameBase LIKE '.Net SqlClient%' THEN 'OLTP'
+                             WHEN @AppNameBase LIKE 'RCSmall%' THEN 'Analytics'
                              WHEN @AppNameBase LIKE 'RTerm.exe' THEN 'Analytics'
                              WHEN @AppNameBase LIKE 'BxlServer.exe' THEN 'Analytics'
                              WHEN @AppNameBase LIKE 'Microsoft Office%' THEN 'AdHoc'

@@ -1,7 +1,7 @@
 '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 '
 '  FBManageRSWMI.vbs  
-'  Copyright FineBuild Team © 2018.  Distributed under Ms-Pl License
+'  Copyright FineBuild Team © 2018 - 2019.  Distributed under Ms-Pl License
 '
 '  Purpose:      Manage RS WMI processes 
 '
@@ -23,7 +23,7 @@ Dim intRSLcid
 
 Class FBManageRSWMIClass
   Dim objRSConfig, objRSWMI, objShell
-  Dim strFunction, strHTTP, strInstRS, strInstRSSQL, strOSVersion, strPath, strRSAlias, strRSNamespace, strSetupPowerBI, strSetupSQLRSCluster, strSQLVersion, strWMIPath
+  Dim strFunction, strHTTP, strInstRS, strInstRSSQL, strOSVersion, strPath, strRSAlias, strRSNamespace, strSetupPowerBI, strSetupSQLRSCluster, strTCPPortRS, strSQLVersion, strWMIPath
 
 
 Private Sub Class_Initialize
@@ -40,6 +40,7 @@ Private Sub Class_Initialize
   strSetupPowerBI   = GetBuildfileValue("SetupPowerBI")
   strSetupSQLRSCluster = GetBuildfileValue("SetupSQLRSCluster")
   strSQLVersion     = GetBuildfileValue("SQLVersion")
+  strTCPPortRS      = GetBuildfileValue("TCPPortRS")
 
 End Sub
 
@@ -52,6 +53,11 @@ Function RunRSWMI(strFunction, strOK)
   strDebugMsg1      = "WMI Path: " & strWMIPath
   Set objRSOutParam = objRSWMI.ExecMethod(strWMIPath, strFunction, objRSInParam)
   intErrSave        = objRSOutParam.HRESULT
+  If intErrSave = -2147023181 Then
+    WScript.Sleep GetBuildfileValue("WaitLong")
+    Set objRSOutParam = objRSWMI.ExecMethod(strWMIPath, strFunction, objRSInParam)
+    intErrSave      = objRSOutParam.HRESULT
+  End If
   Select Case True
     Case intErrSave = 0
       ' Nothing
@@ -157,7 +163,7 @@ Private Sub SetRSURL(strApplication, strDirectory)
       objRSInParam.Properties_.Item("lcid")                         = intRSLcid
       strURLVar      = "URLString"
   End Select
-  strURL             = strHTTP & "://" & GetBuildfileValue("AuditServer") & ":80"
+  strURL             = strHTTP & "://" & GetBuildfileValue("AuditServer") & ":" & strTCPPortRS
   strDebugMsg1       = "URL: " & strURL
   objRSInParam.Properties_.Item(CStr(strURLVar)) = strURL
   Call RunRSWMI(strFunction, "-2147220932") ' OK if URL already exists
@@ -166,7 +172,7 @@ Private Sub SetRSURL(strApplication, strDirectory)
     Case strSetupSQLRSCluster <> "YES"
       ' Nothing
     Case Else
-      objRSInParam.Properties_.Item(CStr(strURLVar)) = strHTTP & "://" & GetBuildfileValue("ClusterGroupRS") & ":80"
+      objRSInParam.Properties_.Item(CStr(strURLVar)) = strHTTP & "://" & GetBuildfileValue("ClusterGroupRS") & ":" & strTCPPortRS
       Call RunRSWMI(strFunction, "-2147220932") ' OK if URL already exists
   End Select
 
@@ -174,7 +180,7 @@ Private Sub SetRSURL(strApplication, strDirectory)
     Case strRSAlias = ""
       ' Nothing
     Case Else
-      objRSInParam.Properties_.Item(CStr(strURLVar)) = strHTTP & "://" & strRSAlias & ":80"
+      objRSInParam.Properties_.Item(CStr(strURLVar)) = strHTTP & "://" & strRSAlias & ":" & strTCPPortRS
       Call RunRSWMI(strFunction, "-2147220932")
   End Select
 
@@ -183,7 +189,7 @@ Private Sub SetRSURL(strApplication, strDirectory)
     Case strClusterIPV4RS = ""
       ' Nothing
     Case Else
-      objRSInParam.Properties_.Item(CStr(strURLVar)) = strHTTP & "://" & strClusterIPV4RS & ":80"
+      objRSInParam.Properties_.Item(CStr(strURLVar)) = strHTTP & "://" & strClusterIPV4RS & ":" & strTCPPortRS
       Call RunRSWMI(strFunction, "-2147220932")
   End Select
 
@@ -194,7 +200,7 @@ Private Sub SetRSURL(strApplication, strDirectory)
     Case strSQLVersion < "SQL2012"
       ' Nothing
     Case Else
-      objRSInParam.Properties_.Item(CStr(strURLVar)) = strHTTP & "://" & strClusterIPV6RS & ":80"
+      objRSInParam.Properties_.Item(CStr(strURLVar)) = strHTTP & "://" & strClusterIPV6RS & ":" & strTCPPortRS
       Call RunRSWMI(strFunction, "-2147220932")
   End Select
 

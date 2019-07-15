@@ -1,7 +1,7 @@
 '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 '
 '  FBManageInstall.vbs  
-'  Copyright FineBuild Team © 2017 - 2018.  Distributed under Ms-Pl License
+'  Copyright FineBuild Team © 2017 - 2019.  Distributed under Ms-Pl License
 '
 '  Purpose:      Install routines required for the Build 
 '
@@ -89,7 +89,7 @@ Sub RunInstall(strInstName, strInstFile, objInstParm)
         Case UCase(strInstallError) = "IGNORE"
           ' Nothing
         Case Else
-          Call SetBuildMessage(strInstallError, Cstr(intErrSave) & " " & strErrSave & " returned by " & strPathInst)
+          Call SetBuildMessage(strInstallError, "SETUP" & strInstName & ": " & Cstr(intErrSave) & " " & strErrSave & " returned by " & strPathInst)
           intErrSave = 0
       End Select
       Call DebugLog(" " & strProcessIdDesc & strStatusFail)
@@ -381,6 +381,7 @@ Private Sub CreateSetupFolder(strPath, strReset)
       Wscript.Sleep strWaitShort
     Case Else
       Call CreateSetupFolder(strPathPrev, "N")
+      Wscript.Sleep strWaitShort
       objFSO.CreateFolder(strPathFull)
       Wscript.Sleep strWaitShort
   End Select
@@ -391,7 +392,7 @@ End Sub
 Private Function RunInstall_Process(strInstName, objInstParm)
   Call DebugLog("RunInstall_Process:")
   Dim strCmd, strCompatFlags, strHKCU, strInstFile, strInstOption, strInstPrompt, strInstType
-  Dim strMode, strMSIAutoKey, strMSIAutoOS, strOSType, strOSVersion
+  Dim strMode, strMSILayer, strMSIAutoOS, strOSType, strOSVersion
   Dim strParmLog, strParmRetry, strPath, strPathCmd, strPathLog, strPathTemp
 
   RunInstall_Process = False
@@ -399,9 +400,9 @@ Private Function RunInstall_Process(strInstName, objInstParm)
   strInstPrompt     = ""
   strInstFile       = Right(strPathInst, Len(strPathInst) - InstrRev(strPathInst, "\"))
   strInstType       = UCase(Right(strPathInst, 4))
-  strMSIAutoKey     = ""
+  strMSILayer       = ""
   strCompatFlags    = GetBuildfileValue("CompatFlags")
-  strHKCU           = GetBuildfileValue("HKCU")
+  strHKCU           = &H80000001
   strMode           = GetBuildfileValue("Mode")
   strOSType         = GetBuildfileValue("OSType")
   strOSVersion      = GetBuildfileValue("OSVersion")
@@ -419,8 +420,9 @@ Private Function RunInstall_Process(strInstName, objInstParm)
     Case strInstType = ".MSI"
       strMSIAutoOS  = UCase(GetXMLParm(objInstParm, "MSIAutoOS",  ""))
       If (strMSIAutoOS <> "") And (strOSVersion > strMSIAutoOS) Then ' Allow MSI to run on newer versions of Windows
-        strMSIAutoKey = strCompatFlags & "Layers\" & strPathInst
-        Call Util_RegWrite(strMSIAutoKey, "MSIAUTO RUNASADMIN" & GetAppOS(strMSIAutoOS), "REG_SZ")
+        strMSILayer = strCompatFlags & "Layers"
+        Call Util_RegWrite(strMSILayer & "\", "", "REG_SZ")
+        objWMIReg.SetStringValue strHKCU, Mid(strMSILayer, 6), strPathInst, "MSIAUTO RUNASADMIN" & GetAppOS(strMSIAutoOS)
       End If
       strPathCmd    = "MSIEXEC /i """ & strPathInst & """ " & GetXMLParm(objInstParm, "ParmReboot", "/norestart")
       If strMode <> "ACTIVE" Then
@@ -551,8 +553,8 @@ Private Function RunInstall_Process(strInstName, objInstParm)
       strDebugMsg1  = "Deleting: " & strPath
       Set objFolder = objFSO.GetFolder(strPath)
       objFolder.Delete(1)
-      If strMSIAutoKey <> "" Then                
-        objWMIReg.DeleteValue strHKCU, strMSIAutoKey, strPathInst
+      If strMSILayer <> "" Then                
+        objWMIReg.DeleteValue strHKCU, Mid(strMSILayer, 6), strPathInst
       End If
   End Select
 
@@ -596,7 +598,7 @@ Private Sub RunInstall_Menu(strInstName, objInstParm)
       Select Case True
         Case Not objFSO.FileExists(strPathOld)
           If UCase(strMenuError) <> "IGNORE" Then
-            Call SetBuildMessage(strMenuError, strMenuName & " Menu source file not found " & strPathOld)
+            Call SetBuildMessage(strMenuError, "SETUP" & strInstName & ": " & strMenuName & " Menu source file not found " & strPathOld)
           End If
           Exit Sub
         Case Not objFSO.FolderExists(strPathNew)

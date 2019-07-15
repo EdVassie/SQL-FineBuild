@@ -1,4 +1,4 @@
--- Copyright FineBuild Team © 2017 - 2018.  Distributed under Ms-Pl License
+-- Copyright FineBuild Team © 2017 - 2019.  Distributed under Ms-Pl License
 -- ReportServer database indexes
 USE [$(strRSDBName)]
 GO
@@ -6,13 +6,6 @@ DECLARE
  @SQLVersion Int
 ,@SQLText    NVarchar(4000);
 SELECT @SQLVersion = cmptlevel FROM master..sysdatabases WHERE name = 'master';
-
-IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID(N'[dbo].[Catalog]') AND name = N'IX_Catalog_ItemId#FB')
-	CREATE NONCLUSTERED INDEX [IX_Catalog_ItemId#FB] ON [dbo].[Catalog]
-	(
-		[ItemId] ASC)
-	INCLUDE(Path,Type,PolicyId)
-	WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY];
 
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID(N'[dbo].[Event]') AND name = N'IX_Event_ProcessStart_TimeEntered#FB')
 	CREATE NONCLUSTERED INDEX [IX_Event_ProcessStart_TimeEntered#FB] ON [dbo].[Event]
@@ -31,6 +24,13 @@ IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID(N'[dbo].[Ev
 		[BatchID] ASC,
 		[TimeEntered] ASC)
 	INCLUDE(EventId,EventType,EventData)
+	WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY];
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID(N'[dbo].[Keys]') AND name = N'IX_Keys_Client#FB')
+	CREATE NONCLUSTERED INDEX [IX_Keys_Client#FB] ON [dbo].[Keys]
+	(
+		[Client] ASC)
+	INCLUDE(InstallationID)
 	WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY];
 
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID(N'[dbo].[Notifications]') AND name = N'IX_Notifications_ProcessStart_NotificationEntered#FB')
