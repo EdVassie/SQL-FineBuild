@@ -8,17 +8,19 @@ IF EXISTS (SELECT 1 FROM sys.procedures WHERE name = N'FB_AGFailover')
 GO
 
 CREATE OR ALTER     PROC [dbo].[FB_AGFailover]
- @AGName            NVARCHAR(120)
+ @AGName            NVARCHAR(120)            -- Name of AG for Failover
+,@TargetServer      NVARCHAR(128)      = ''  -- Name of desired New Primary server
+,@Execute           CHAR(1)            = 'Y' -- Execute commands
 ,@RemoteCall        VARCHAR(1)         = 'N' -- Internal Use Only
 ,@Operation         CHAR(1)            = ''  -- Internal Use Only
 AS
 -- FB_AGFailover
--- Copyright FineBuild Team © 2019.  Distributed under Ms-Pl License
 --
 -- This routine performs a failover of an Availability Group
 -- The routine will work out from the AG Name what type of availability group is involved, and process accordingly
 --
 -- Syntax: EXEC FB_AGFailover @AGName='???'
+--     or: EXEC FB_AGFailover @AGName='???', @TargetServer='???' if a specific target server is required
 --
 -- Do not use any of the parameters marked 'Internal Use Only', they are used within the Main Control Process
 --
@@ -27,34 +29,37 @@ AS
 --
 -- Date        Name  Comment
 -- 30/05/2019  EMV   Initial code
+-- 25/06/2019  EMV   Added @TargetServer and @Execute logic
 --
 BEGIN;
   SET NOCOUNT ON;
 
   DECLARE
    @Server          NVARCHAR(128)
-  ,@SQLText         NVARCHAR(2000)
-  ,@NonSync         INT;
-
-  SELECT
-   @NonSync         = -1
-  ,@Server          = CAST(SERVERPROPERTY('ServerName') AS NVARCHAR(120));
+  ,@SQLText         NVARCHAR(2000) = ''
+  ,@NonSync         INT            = -1;
 
   DROP TABLE IF EXISTS #Parameters;
   CREATE TABLE #Parameters
   (AGName           NVARCHAR(128)
+  ,TargetServer     NVARCHAR(128)
+  ,ExecProcess      CHAR(1)
   ,CRLF             CHAR(2)
   ,RemoteCall       CHAR(1)
   ,Operation        CHAR(1));
 
-  INSERT INTO #Parameters (AGName,CRLF,RemoteCall,Operation)
+  INSERT INTO #Parameters (AGName,TargetServer,ExecProcess,CRLF,RemoteCall,Operation)
   VALUES (
    @AGName
+  ,@TargetServer
+  ,@Execute
   ,Char(13) + Char(10)
   ,@RemoteCall
   ,@Operation);
   UPDATE #Parameters SET
-   AGName          = REPLACE(REPLACE(AGName, '[',''),']','');
+   AGName           = REPLACE(REPLACE(AGName, '[',''),']','')
+  ,TargetServer     = CASE WHEN p.TargetServer <> '' THEN p.TargetServer ELSE CAST(SERVERPROPERTY('ServerName') AS NVARCHAR(128)) END
+  FROM #Parameters p;
 
   DROP TABLE IF EXISTS #AGServers;
   CREATE TABLE #AGServers
@@ -64,112 +69,113 @@ BEGIN;
   ,ServerCount      INT
   ,ServerName       NVARCHAR(128)
   ,ServerRole       NVARCHAR(128)
-  ,EndpointURL      NVARCHAR(128)
+  ,Endpoint         NVARCHAR(128)
   ,ServerId         INT
   ,TargetServer     CHAR(1));
 
-  INSERT INTO #AGServers (AGName, AGType, AvailabilityMode, ServerCount, ServerName, ServerRole, EndpointURL, ServerId)
+  INSERT INTO #AGServers (AGName, AGType, AvailabilityMode, ServerCount, ServerName, ServerRole, Endpoint, ServerId)
   SELECT
-   p.AGName
+   ag.name
   ,CASE WHEN ag.is_distributed = 1 THEN 'D' WHEN ag.basic_features = 1 THEN 'B' ELSE '' END
   ,ar.availability_mode
   ,ISNULL(ag.required_synchronized_secondaries_to_commit, 0)
   ,ar.replica_server_name
-  ,'S'
-  ,ar.endpoint_url
-  ,ROW_NUMBER() OVER(ORDER BY ar.replica_server_name)
-  FROM #Parameters p
-  JOIN [master].[sys].[availability_groups] ag ON ag.name = p.AGName
-  JOIN [master].[sys].[dm_hadr_availability_replica_states] ars ON ars.group_id = ag.group_id
-  JOIN [master].[sys].[availability_replicas] ar ON ar.replica_id = ars.replica_id
-  WHERE ars.role_desc = 'SECONDARY';
-
-  UPDATE #AGServers SET
-   TargetServer     = 'Y'
-  WHERE ServerId = (SELECT MAX(ServerId) FROM #AGServers WHERE (ServerId = 1) OR (@Server = SUBSTRING(EndpointURL, 7, CHARINDEX('.',EndpointURL) - 7)));
-
-  INSERT INTO #AGServers (AGName, AGType, AvailabilityMode, ServerName, ServerRole, EndpointURL)
-  SELECT
-   p.AGName
-  ,CASE WHEN ag.is_distributed = 1 THEN 'D' WHEN ag.basic_features = 1 THEN 'B' ELSE '' END
-  ,ar.availability_mode
-  ,ar.replica_server_name
-  ,'P'
-  ,ar.endpoint_url
+  ,CASE WHEN ars.replica_id IS NULL THEN 'P' ELSE LEFT(ars.role_desc, 1) END
+  ,SUBSTRING(ar.endpoint_url, 7, CHARINDEX('.',ar.endpoint_url) - 7)
+  ,ROW_NUMBER() OVER(ORDER BY CASE WHEN ars.role_desc = 'SECONDARY' THEN 1 ELSE 2 END, ar.replica_server_name)
   FROM #Parameters p
   JOIN [master].[sys].[availability_groups] ag ON ag.name = p.AGName
   JOIN [master].[sys].[availability_replicas] ar ON ar.group_id = ag.group_id
-  LEFT JOIN #AGServers a ON a.ServerName = ar.replica_server_name
-  WHERE a.ServerName IS NULL;
+  LEFT JOIN [master].[sys].[dm_hadr_availability_replica_states] ars ON ars.group_id = ag.group_id AND ars.replica_id = ar.replica_id;
+
+  UPDATE #AGServers SET
+   TargetServer = 'Y'
+  FROM #Parameters p
+  WHERE ServerId = (SELECT MAX(ServerId) FROM #AGServers WHERE (ServerId = 1) OR (p.TargetServer = Endpoint AND ServerRole = 'S'));
+
+
+  IF (SELECT ExecProcess FROM #Parameters) <> 'Y' SELECT * FROM #AGServers;
 
   IF (SELECT RemoteCall FROM #Parameters) <> 'Y' -- Main Control Process
   BEGIN;
-  
-    SELECT
-     @SQLText       = 'Performing Failover of: ' + p.AGName +
-                      p.CRLF + 'Current Primary Server: '   + a.ServerName
-    FROM #Parameters p
-    JOIN #AGServers a ON a.AGName = p.AGName
-    WHERE a.ServerRole = 'P';
-    SELECT
-     @SQLText       = @SQLText +
-	              p.CRLF + 'Current Secondary Server: ' + a.ServerName  
-    FROM #Parameters p
-    JOIN #AGServers a ON a.AGName = p.AGName
-    WHERE a.ServerRole = 'S' AND a.TargetServer = 'Y';
-    SELECT
-     @SQLText       = @SQLText + p.CRLF + REPLICATE('*', 40)
-    FROM #Parameters p;
-    PRINT @SQLText;
+ 
+ 	SELECT
+	 @SQLText          = 'Performing Failover of: ' + p.AGName
+	FROM #Parameters p;
+	SELECT
+	 @SQLText          = @SQLText + p.CRLF + 'Current Primary Server: '   + a.ServerName
+	FROM #Parameters p
+	JOIN #AGServers a ON a.AGName = p.AGName
+	WHERE a.ServerRole = 'P';
+	SELECT
+	 @SQLText          = @SQLText + p.CRLF + 'Current Secondary Server: ' + a.ServerName  
+	FROM #Parameters p
+	JOIN #AGServers a ON a.AGName = p.AGName
+	WHERE a.TargetServer = 'Y';
+	SELECT
+	 @SQLText          = @SQLText + p.CRLF + REPLICATE('*', 40)
+	FROM #Parameters p;
+	PRINT @SQLText;
 	
-    SELECT
-     @SQLText       = p.CRLF + 'EXECUTE [' + a.ServerName + '].master.dbo.FB_AGFailover @AGName=''' + p.AGName + ''', @RemoteCall=''Y'',@Operation = ''S'''
-    FROM #Parameters p
-    JOIN #AGServers a ON a.AGName = p.AGName
-    WHERE a.ServerRole = 'P';
-    EXECUTE sp_executeSQL @SQLText;
-    SELECT
-     @SQLText       = p.CRLF + 'EXECUTE [' + a.ServerName + '].master.dbo.FB_AGFailover @AGName=''' + p.AGName + ''', @RemoteCall=''Y'',@Operation = ''S'''
-    FROM #Parameters p
-    JOIN #AGServers a ON a.AGName = p.AGName
-    WHERE a.ServerRole = 'S';
-    EXECUTE sp_executeSQL @SQLText;
+	SELECT
+     @SQLText       = p.CRLF + 'EXECUTE [' + a.ServerName + '].master.dbo.FB_AGFailover @AGName=''' + p.AGName + ''', @TargetServer=''' + p.TargetServer + ''', @RemoteCall=''Y'',@Operation = ''S'''
+	FROM #Parameters p
+	JOIN #AGServers a ON a.AGName = p.AGName
+	WHERE a.ServerRole = 'P';
+	IF (SELECT ExecProcess FROM #Parameters) = 'Y'  EXECUTE sp_executeSQL @SQLText;
+	IF (SELECT ExecProcess FROM #Parameters) <> 'Y' PRINT @SQLText;
+	SELECT
+     @SQLText       = p.CRLF + 'EXECUTE [' + a.ServerName + '].master.dbo.FB_AGFailover @AGName=''' + p.AGName + ''', @TargetServer=''' + p.TargetServer + ''', @RemoteCall=''Y'',@Operation = ''S'''
+	FROM #Parameters p
+	JOIN #AGServers a ON a.AGName = p.AGName
+	WHERE a.ServerRole = 'S';
+	IF (SELECT ExecProcess FROM #Parameters) = 'Y'  EXECUTE sp_executeSQL @SQLText;
+	IF (SELECT ExecProcess FROM #Parameters) <> 'Y' PRINT @SQLText;
 	
-    SELECT
-     @SQLText       = p.CRLF + 'EXECUTE [' + a.ServerName + '].master.dbo.FB_AGFailover @AGName=''' + p.AGName + ''', @RemoteCall=''Y'',@Operation = ''R'''
-    FROM #Parameters p
-    JOIN #AGServers a ON a.AGName = p.AGName
-    WHERE a.ServerRole = 'P' AND a.AvailabilityMode = 0;
-    EXECUTE sp_executeSQL @SQLText;
+  	SELECT
+     @SQLText       = p.CRLF + 'EXECUTE [' + a.ServerName + '].master.dbo.FB_AGFailover @AGName=''' + p.AGName + ''', @TargetServer=''' + p.TargetServer + ''', @RemoteCall=''Y'',@Operation = ''R'''
+	FROM #Parameters p
+	JOIN #AGServers a ON a.AGName = p.AGName
+	WHERE a.ServerRole = 'P';
+	IF (SELECT ExecProcess FROM #Parameters) = 'Y'  EXECUTE sp_executeSQL @SQLText;
+	IF (SELECT ExecProcess FROM #Parameters) <> 'Y' PRINT @SQLText;
 	
-    SELECT
-     @SQLText       = p.CRLF + 'EXECUTE [' + a.ServerName + '].master.dbo.FB_AGFailover @AGName=''' + p.AGName + ''', @RemoteCall=''Y'',@Operation = ''F'''
-    FROM #Parameters p
-    JOIN #AGServers a ON a.AGName = p.AGName
-    WHERE a.ServerRole = 'S' AND a.TargetServer = 'Y';
-    EXECUTE sp_executeSQL @SQLText;
+  	SELECT
+     @SQLText       = p.CRLF + 'EXECUTE [' + a.ServerName + '].master.dbo.FB_AGFailover @AGName=''' + p.AGName + ''', @TargetServer=''' + p.TargetServer + ''', @RemoteCall=''Y'',@Operation = ''F'''
+	FROM #Parameters p
+	JOIN #AGServers a ON a.AGName = p.AGName
+	WHERE a.TargetServer = 'Y';
+	IF (SELECT ExecProcess FROM #Parameters) = 'Y'  EXECUTE sp_executeSQL @SQLText;
+	IF (SELECT ExecProcess FROM #Parameters) <> 'Y' PRINT @SQLText;
 	
-    SELECT
-     @SQLText       = p.CRLF + 'EXECUTE [' + a.ServerName + '].master.dbo.FB_AGFailover @AGName=''' + p.AGName + ''', @RemoteCall=''Y'',@Operation = ''A'''
-    FROM #Parameters p
-    JOIN #AGServers a ON a.AGName = p.AGName
-    WHERE a.ServerRole = 'P' AND a.AvailabilityMode = 0;
-    EXECUTE sp_executeSQL @SQLText;
-    SELECT
-     @SQLText       = p.CRLF + 'EXECUTE [' + a.ServerName + '].master.dbo.FB_AGFailover @AGName=''' + p.AGName + ''', @RemoteCall=''Y'',@Operation = ''A'''
-    FROM #Parameters p
-    JOIN #AGServers a ON a.AGName = p.AGName
-    WHERE a.ServerRole = 'S' AND a.AvailabilityMode = 0;
-    EXECUTE sp_executeSQL @SQLText;
+	SELECT
+     @SQLText       = p.CRLF + 'EXECUTE [' + a.ServerName + '].master.dbo.FB_AGFailover @AGName=''' + p.AGName + ''', @TargetServer=''' + p.TargetServer + ''', @RemoteCall=''Y'',@Operation = ''A'''
+	FROM #Parameters p
+	JOIN #AGServers a ON a.AGName = p.AGName
+	WHERE a.ServerRole = 'P' AND (a.AvailabilityMode = 0 OR a.AGType = 'D');
+	IF (SELECT ExecProcess FROM #Parameters) = 'Y'  EXECUTE sp_executeSQL @SQLText;
+	IF (SELECT ExecProcess FROM #Parameters) <> 'Y' PRINT @SQLText;
+	SELECT
+     @SQLText       = p.CRLF + 'EXECUTE [' + a.ServerName + '].master.dbo.FB_AGFailover @AGName=''' + p.AGName + ''', @TargetServer=''' + p.TargetServer + ''', @RemoteCall=''Y'',@Operation = ''A'''
+	FROM #Parameters p
+	JOIN #AGServers a ON a.AGName = p.AGName
+	WHERE a.ServerRole = 'S' AND (a.AvailabilityMode = 0 OR a.AGType = 'D');
+	IF (SELECT ExecProcess FROM #Parameters) = 'Y'  EXECUTE sp_executeSQL @SQLText;
+	IF (SELECT ExecProcess FROM #Parameters) <> 'Y' PRINT @SQLText;
 	
-    SELECT
-     @SQLText       = REPLICATE('*', 40) +
-                      p.CRLF + 'SQL Failover of ' + p.AGName + ' to ' + a.ServerName + ' complete' +
-                      p.CRLF + 'Update DNS Alias for ' + p.AGName + ' to point to ' + a.ServerName
-    FROM #Parameters p
-    JOIN #AGServers a ON a.AGName = p.AGName
-    WHERE a.ServerRole = 'S';
-    PRINT @SQLText;
+	SELECT
+	 @SQLText       = REPLICATE('*', 40) +
+	                  p.CRLF + 'SQL Failover of ' + p.AGName + ' to ' + a.ServerName + ' complete'
+	FROM #Parameters p
+	JOIN #AGServers a ON a.AGName = p.AGName
+	WHERE a.TargetServer = 'Y';
+	SELECT
+	 @SQLText       = @SQLText +
+	                  p.CRLF + 'Update DNS Alias for ' + p.AGName + ' to point to ' + a.ServerName
+	FROM #Parameters p
+	JOIN #AGServers a ON a.AGName = p.AGName
+	WHERE a.TargetServer = 'Y' AND a.AGType = 'D';
+	PRINT @SQLText;
 
   END;
 
@@ -188,67 +194,67 @@ BEGIN;
     JOIN [master].[sys].[availability_groups] ag ON ag.name = p.AGName
     JOIN [master].[sys].[availability_replicas] ar ON ar.group_id = ag.group_id;
     SELECT @SQLText = LEFT(@SQLText, LEN(@SQLText) - 1) + ';';
-    PRINT @SQLText;
+	PRINT @SQLText;
     EXECUTE sp_executeSQL @SQLText;
-    PRINT 'Processing on Server ' + @Server;
-    PRINT '';
+	PRINT 'Processing on Server ' + @Server;
+	PRINT '';
   END;
 
   IF (SELECT Operation FROM #Parameters) = 'R' -- AG Role Change
   BEGIN; 
     WHILE (@NonSync <> 0)
-    BEGIN;
-      SELECT
-       @SQLText     = CASE WHEN @NonSync > 0 THEN 'Waiting for Primary states to be SYNCHRONIZED for ' + Cast(@NonSync AS varchar(8)) + ' databases'
-                           ELSE '' END;
-      IF @SQLText <> '' PRINT @SQLText;
-      WAITFOR DELAY '00:00:01'
-      SELECT
-       @NonSync = COUNT(*)
-      FROM #Parameters p
-      JOIN [master].[sys].[availability_groups] ag ON ag.name = p.AGName
-      JOIN [master].[sys].[availability_replicas] ar1 ON ar1.group_id = ag.group_id
+	BEGIN;
+	  SELECT
+	   @SQLText     = CASE WHEN @NonSync > 0 THEN 'Waiting for Primary states to be SYNCHRONIZED for ' + Cast(@NonSync AS varchar(8)) + ' databases'
+	                       ELSE '' END;
+	  IF @SQLText <> '' PRINT @SQLText;
+	  WAITFOR DELAY '00:00:01'
+	  SELECT
+	   @NonSync = COUNT(*)
+	  FROM #Parameters p
+	  JOIN [master].[sys].[availability_groups] ag ON ag.name = p.AGName
+	  JOIN [master].[sys].[availability_replicas] ar1 ON ar1.group_id = ag.group_id
       JOIN [master].[sys].[dm_hadr_database_replica_states] drs1 ON drs1.group_id = ar1.group_id AND drs1.replica_id = ar1.replica_id 
       JOIN [master].[sys].[availability_replicas] ar2 ON ar2.group_id = ar1.group_id AND ar2.replica_id <> ar1.replica_id
       JOIN [master].[sys].[availability_replicas] ar3 ON ar3.endpoint_url = ar2.endpoint_url
       JOIN [master].[sys].[dm_hadr_database_replica_states] drs2 ON drs2.group_id = ar3.group_id AND drs2.replica_id = ar3.replica_id AND drs2.database_id = drs1.database_id
-      WHERE drs2.synchronization_state_desc <> 'SYNCHRONIZED' OR drs2.last_commit_lsn <> drs1.last_commit_lsn;
-    END;
+	  WHERE drs2.synchronization_state_desc NOT IN ('SYNCHRONIZED', 'NOT SYNCHRONIZING') OR drs2.last_commit_lsn <> drs1.last_commit_lsn;
+	END;
     SELECT
      @SQLText       = 'ALTER AVAILABILITY GROUP [' + p.AGName + '] SET (ROLE=SECONDARY);' 
-    FROM #Parameters p;
-    PRINT @SQLText;
+	FROM #Parameters p;
+	PRINT @SQLText;
     EXECUTE sp_executeSQL @SQLText;
-    PRINT 'Processing on Server ' + @Server;
-    PRINT '';
+	PRINT 'Processing on Server ' + @Server;
+	PRINT '';
   END;
 
   IF (SELECT Operation FROM #Parameters) = 'F' -- AG Failover
   BEGIN; 
     WHILE (@NonSync <> 0)
-    BEGIN;
-      SELECT
-       @SQLText     = @SQLText + CASE WHEN @NonSync > 0 THEN 'Waiting for Secondary states to be SYNCHRONIZED for ' + Cast(@NonSync AS varchar(8)) + ' databases'
-	                              ELSE '' END;
-      IF @SQLText <> '' PRINT @SQLText;
-      WAITFOR DELAY '00:00:01'
-      SELECT
-       @NonSync = COUNT(*)
-      FROM #Parameters p
-      JOIN [master].[sys].[availability_groups] ag ON ag.name = p.AGName
-      JOIN [master].[sys].[availability_replicas] ar1 ON ag.group_id = ag.group_id
-      JOIN [master].[sys].[availability_replicas] ar2 ON ar2.endpoint_url = ar1.endpoint_url
-      JOIN [master].[sys].[availability_groups] ag2 ON ag2.group_id = ar2.group_id AND ag2.name = ar1.replica_server_name
-      JOIN [master].[sys].[dm_hadr_database_replica_states] drs ON drs.group_id = ar2.group_id
-      WHERE drs.synchronization_state_desc <> 'SYNCHRONIZED';
-    END;
+	BEGIN;
+	  SELECT
+	   @SQLText     = @SQLText + CASE WHEN @NonSync > 0 THEN 'Waiting for Secondary states to be SYNCHRONIZED for ' + Cast(@NonSync AS varchar(8)) + ' databases'
+	                                  ELSE '' END;
+	  IF @SQLText <> '' PRINT @SQLText;
+	  WAITFOR DELAY '00:00:01'
+	  SELECT
+	   @NonSync = COUNT(*)
+	  FROM #Parameters p
+	  JOIN [master].[sys].[availability_groups] ag ON ag.name = p.AGName
+	  JOIN [master].[sys].[availability_replicas] ar1 ON ag.group_id = ag.group_id
+	  JOIN [master].[sys].[availability_replicas] ar2 ON ar2.endpoint_url = ar1.endpoint_url
+	  JOIN [master].[sys].[availability_groups] ag2 ON ag2.group_id = ar2.group_id AND ag2.name = ar1.replica_server_name
+	  JOIN [master].[sys].[dm_hadr_database_replica_states] drs ON drs.group_id = ar2.group_id
+	  WHERE drs.synchronization_state_desc NOT IN ('SYNCHRONIZED', 'NOT SYNCHRONIZING');
+	END;
     SELECT
      @SQLText       = 'ALTER AVAILABILITY GROUP [' + p.AGName + '] FORCE_FAILOVER_ALLOW_DATA_LOSS;' 
-    FROM #Parameters p;
-    PRINT @SQLText;
+	FROM #Parameters p;
+	PRINT @SQLText;
     EXECUTE sp_executeSQL @SQLText;
-    PRINT 'Processing on Server ' + @Server;
-    PRINT '';
+	PRINT 'Processing on Server ' + @Server;
+	PRINT '';
   END;
 
 END;
@@ -259,9 +265,17 @@ IF EXISTS (SELECT 1 FROM sys.procedures WHERE name = N'FB_AGPostFailover')
   DROP PROCEDURE dbo.FB_AGPostFailover;
 GO
 
-CREATE OR ALTER     PROC [dbo].[FB_AGPostFailover]
+ALTER PROC [dbo].[FB_AGPostFailover]
 AS
---  Copyright FineBuild Team © 2018-2019.  Distributed under Ms-Pl License
+-- FB_AGPostFailover
+--
+-- This routine performs post-failover tasks for an Availability Group
+--
+-- Syntax: EXEC FB_AGPostFailover
+--
+-- Date        Name  Comment
+-- 25/06/2019  EMV   Initial code
+--
 BEGIN;
   SET NOCOUNT ON;
 
@@ -277,7 +291,7 @@ BEGIN;
   ,@SQLText         NVARCHAR(4000);
 
   CREATE TABLE #SpecialDB
-   (Name            NVARCHAR(120));
+   (Name           NVARCHAR(120));
 
   INSERT INTO #SpecialDB (Name)
   SELECT 'master'
@@ -309,8 +323,11 @@ BEGIN;
   CROSS JOIN sys.dm_hadr_availability_replica_states rs
   LEFT JOIN sys.availability_replicas ar
     ON rs.replica_id = ar.replica_id AND rs.group_id = ar.group_id
+  LEFT JOIN sys.databases d
+    ON d.name = SUBSTRING(LEFT(performance_condition, CHARINDEX('|>|', performance_condition) - 1), LEN('SQLServer:Databases|Percent Log Used|') + 1, LEN(performance_condition))
   WHERE UPPER(ar.replica_server_name) = @ServerName
   AND a.name LIKE 'DB %: Log Usage%'
+  AND d.name IS NOT null
   ORDER BY a.name;
 
   OPEN Log_Alerts;
