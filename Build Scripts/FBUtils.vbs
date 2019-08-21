@@ -80,7 +80,7 @@ End Function
 
 
 Function FormatFolder(strFolder)
-  Call DebugLog("FormatFolder: " &strFolder)
+  Call DebugLog("FormatFolder: " & strFolder)
   Dim strFBLocal, strFBRemote, strFolderPath
 
   strFBLocal        = GetBuildfileValue("FBPathLocal")
@@ -110,7 +110,7 @@ End Function
 
 
 Function FormatFolderURI(strFolder)
-  Call DebugLog("FormatFolderURI: " &strFolder)
+  Call DebugLog("FormatFolderURI: " & strFolder)
   Dim strFolderPath
 
   strFolderPath     = FormatFolder(strFolder)

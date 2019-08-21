@@ -23,24 +23,38 @@ Dim intRSLcid
 
 Class FBManageRSWMIClass
   Dim objRSConfig, objRSWMI, objShell
-  Dim strFunction, strHTTP, strInstRS, strInstRSSQL, strOSVersion, strPath, strRSAlias, strRSNamespace, strSetupPowerBI, strSetupSQLRSCluster, strTCPPortRS, strSQLVersion, strWMIPath
+  Dim strFunction, strHTTP, strInstRS, strInstRSSQL, strOSVersion, strPath, strRSAlias, strRSNamespace, strRSWMIPath, strSetupPowerBI, strSetupSQLRSCluster, strTCPPortRS, strSQLVersion, strWMIPath
 
 
 Private Sub Class_Initialize
   Call DebugLog("FBManageRSWMI Class_Initialize:")
+  Dim strInstRSWMI, strRSVersionNum
 
   Set objShell      = WScript.CreateObject ("Wscript.Shell")
 
   strHTTP           = GetBuildfileValue("HTTP")
   strInstRS         = GetBuildfileValue("InstRS")
   strInstRSSQL      = GetBuildfileValue("InstRSSQL")
+  strInstRSWMI      = GetBuildfileValue("InstRSWMI")
   strOSVersion      = GetBuildfileValue("OSVersion")
   strRSAlias        = GetBuildfileValue("RSAlias")
   strRSNamespace    = "MSReportServer_ConfigurationSetting"
+  strRSVersionNum   = GetBuildfileValue("RSVersionNum")
   strSetupPowerBI   = GetBuildfileValue("SetupPowerBI")
   strSetupSQLRSCluster = GetBuildfileValue("SetupSQLRSCluster")
   strSQLVersion     = GetBuildfileValue("SQLVersion")
   strTCPPortRS      = GetBuildfileValue("TCPPortRS")
+
+  Select Case True
+    Case strSQLVersion <= "SQL2005"
+      strRSWMIPath  = "winmgmts:{impersonationLevel=impersonate}!\\.\root\Microsoft\SqlServer\ReportServer\v" & strRSVersionNum & "\Admin"
+    Case strSQLVersion >= "SQL2017"
+      strRSWMIPath  = "winmgmts:{impersonationLevel=impersonate}!\\.\root\Microsoft\SqlServer\ReportServer\" & strInstRSWMI & "\V" & strRSVersionNum & "\Admin"
+    Case strSetupPowerBI = "YES"
+      strRSWMIPath  = "winmgmts:{impersonationLevel=impersonate}!\\.\root\Microsoft\SqlServer\ReportServer\" & strInstRSWMI & "\V" & strRSVersionNum & "\Admin"
+    Case Else
+      strRSWMIPath  = "winmgmts:{impersonationLevel=impersonate}!\\.\root\Microsoft\SqlServer\ReportServer\" & strInstRSWMI & "\v" & strRSVersionNum & "\Admin"
+  End Select
 
 End Sub
 
@@ -54,6 +68,7 @@ Function RunRSWMI(strFunction, strOK)
   Set objRSOutParam = objRSWMI.ExecMethod(strWMIPath, strFunction, objRSInParam)
   intErrSave        = objRSOutParam.HRESULT
   If intErrSave = -2147023181 Then
+    WScript.Sleep GetBuildfileValue("WaitLong")
     WScript.Sleep GetBuildfileValue("WaitLong")
     Set objRSOutParam = objRSWMI.ExecMethod(strWMIPath, strFunction, objRSInParam)
     intErrSave      = objRSOutParam.HRESULT
@@ -210,12 +225,9 @@ End Sub
 
 
 Private Sub SetRSWMI()
-  Call DebugLog("SetRSWMI:")
-  Dim strWMIPath
+  Call DebugLog("SetRSWMI: " & strRSWMIPath)
 
-  strWMIPath        = GetBuildfileValue("RSWMIPath")
-  Call DebugLog("WMI Path: " & strWMIPath)
-  Set objRSWMI      = GetObject(strWMIPath)
+  Set objRSWMI      = GetObject(strRSWMIPath)
 
   Select Case True
     Case strSQLVersion >= "SQL2017"
