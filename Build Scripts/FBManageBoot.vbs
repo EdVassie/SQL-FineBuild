@@ -1,7 +1,7 @@
 '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 '
 '  FBManageBoot.vbs  
-'  Copyright FineBuild Team © 2017 - 2018.  Distributed under Ms-Pl License
+'  Copyright FineBuild Team © 2017 - 2019.  Distributed under Ms-Pl License
 '
 '  Purpose:      Manage the FineBuild Boot processing 
 '
@@ -122,7 +122,7 @@ Sub SetupReboot(strLabel, strDescription)
     Case strStopAt < strProcessId
       ' Nothing
     Case Else
-      strCmd        = strCmd & " /StopAt:" & strProcessId
+      strCmd        = strCmd & " /StopAt:" & strStopAt
   End Select
 
   strPath           = "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce\FineBuild" & strLabel

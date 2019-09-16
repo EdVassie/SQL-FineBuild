@@ -22,7 +22,7 @@ Dim strHKCR, strHKLM, strErrSave, strResponseYes, strResponseNo
 
 Class FBUtilsClass
 
-Dim objAutoUpdate, objFSO, objShell, objWMIReg
+Dim objAutoUpdate, objFile, objFSO, objShell, objWMIReg
 Dim colPrcEnvVars
 Dim strCmd, strCmdPS, strGroupDBA, strGroupDBANonSA, strIsInstallDBA, strOSVersion, strPath, strServer, strSIDDistComUsers, strUserAccount
 Dim intIdx
@@ -51,6 +51,18 @@ Private Sub Class_Initialize
   strResponseNo     = GetBuildfileValue("ResponseNo")
   strResponseYes    = GetBuildfileValue("ResponseYes")
   strUserAccount    = GetBuildfileValue("UserAccount")
+
+End Sub
+
+
+Sub CopyFile(strSource, strTarget)
+  Call DebugLog("CopyFile: " & strSource & " to " & strTarget)
+
+  Set objFile       = objFSO.GetFile(strSource)
+  strPath           = strTarget & objFile.Name
+  If Not objFSO.FileExists(strPath) Then
+    objFile.Copy strPath, True
+  End If
 
 End Sub
 
@@ -253,7 +265,7 @@ End Sub
 
 Sub SetupFolder(strFolder)
   Call DebugLog("SetupFolder: " & strFolder)
-  Dim strPathParent
+  Dim strPath, strPathParent
 
   strPath           = strFolder
   If Right(strPath, 1) = "\" Then
@@ -621,6 +633,10 @@ End Sub
 
 End Class
 
+
+Sub CopyFile(strSource, strTarget)
+  Call FBUtils.CopyFile(strSource, strTarget)
+End Sub
 
 Function FormatAccount(strAccount)
   FormatAccount     = FBUtils.FormatAccount(strAccount)
