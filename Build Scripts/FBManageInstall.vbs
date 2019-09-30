@@ -508,8 +508,13 @@ Private Function RunInstall_Process(strInstName, objInstParm)
       strPathCmd    = strPathCmd & " "  & GetXMLParm(objInstParm, "ParmXtra", "")
       strPathCmd    = strPathCmd & " -o " & strPathLog
       strInstPrompt = "EOF"
-    Case strInstType = ".VBS"
+    Case (strInstType = ".JS") Or (strInstType = ".VBS") Or (strInstType = ".WSF")
       strPathCmd    = "%COMSPEC% /D /C CSCRIPT """ & strPathInst & """"
+      strPathCmd    = strPathCmd & " "  & GetXMLParm(objInstParm, "ParmXtra", "")
+      strPathCmd    = strPathCmd & " > " & strPathLog
+      strInstPrompt = "EOF"
+    Case (strInstType = ".BAT") Or (strInstType = ".CMD")
+      strPathCmd    = """" & strPathInst & """"
       strPathCmd    = strPathCmd & " "  & GetXMLParm(objInstParm, "ParmXtra", "")
       strPathCmd    = strPathCmd & " > " & strPathLog
       strInstPrompt = "EOF"

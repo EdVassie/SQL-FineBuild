@@ -22,18 +22,21 @@ Dim strHKCR, strHKLM, strErrSave, strResponseYes, strResponseNo
 
 Class FBUtilsClass
 
-Dim objAutoUpdate, objFile, objFSO, objShell, objWMIReg
+Dim objADOCmd, objADOConn, objAutoUpdate, objFile, objFSO, objSDHelper, objShell, objWMI, objWMIReg
 Dim colPrcEnvVars
-Dim strCmd, strCmdPS, strGroupDBA, strGroupDBANonSA, strIsInstallDBA, strOSVersion, strPath, strServer, strSIDDistComUsers, strUserAccount
+Dim strCmd, strCmdPS, strGroupDBA, strGroupDBANonSA, strIsInstallDBA, strOSVersion, strPath, strProgCacls, strServer, strSIDDistComUsers, strUserAccount, strWaitShort
 Dim intIdx
 
 
 Private Sub Class_Initialize
   Call DebugLog("FBUtils Class_Initialize:")
 
+  Set objADOConn    = CreateObject("ADODB.Connection")
+  Set objADOCmd     = CreateObject("ADODB.Command")
   Set objAutoUpdate = CreateObject("Microsoft.Update.AutoUpdate")
   Set objFSO        = CreateObject("Scripting.FileSystemObject")
   Set objShell      = CreateObject("Wscript.Shell")
+  Set objWMI        = GetObject("winmgmts:{impersonationLevel=impersonate}!\\.\root\cimv2")
   Set objWMIReg     = GetObject("winmgmts:{impersonationLevel=impersonate}!\\.\root\default:StdRegProv")
   Set colPrcEnvVars = objShell.Environment("Process")
 
@@ -46,11 +49,18 @@ Private Sub Class_Initialize
   strGroupDBANonSA  = GetBuildfileValue("GroupDBANonSA")
   strIsInstallDBA   = GetBuildfileValue("IsInstallDBA")
   strOSVersion      = GetBuildfileValue("OSVersion")
+  strProgCacls      = GetBuildfileValue("ProgCacls")
   strServer         = GetBuildfileValue("AuditServer")
   strSIDDistComUsers  = GetBuildfileValue("SIDDistComUsers")
   strResponseNo     = GetBuildfileValue("ResponseNo")
   strResponseYes    = GetBuildfileValue("ResponseYes")
   strUserAccount    = GetBuildfileValue("UserAccount")
+  strWaitShort      = GetBuildfileValue("WaitShort")
+
+  objADOConn.Provider            = "ADsDSOObject"
+  objADOConn.Open "ADs Provider"
+  Set objADOCmd.ActiveConnection = objADOConn
+  Set objSDHelper   = objWMI.Get("Win32_SecurityDescriptorHelper")
 
 End Sub
 
@@ -149,6 +159,130 @@ Function FormatServer(strServer, strProtocol)
 End Function
 
 
+Function GetUserAttr(strUserAccount, strUserDnsDomain, strUserAttr)
+  Call DebugLog("GetUserAttr: " & strUserAccount & ", " & strUserAttr)
+  Dim objField, objRecordSet
+  Dim strAccount,strAttrObject, strAttrValue
+  Dim intIdx
+ 
+  strAttrValue      = ""
+  strAccount        = FormatAccount(strUserAccount)
+  intIdx            = Instr(strAccount, "\")
+  Select Case True
+    Case intIdx > 0
+      strAccount    = Mid(strAccount, intIdx  + 1)
+    Case StrComp(strAccount, strServer, vbTextCompare) = 0
+      strAccount    = strAccount & "$"
+   End Select
+
+  On Error Resume Next 
+  objADOCmd.CommandText          = "<LDAP://DC=" & Replace(strUserDnsDomain, ".", ",DC=") & ">;(&(sAMAccountName=" & strAccount & "));CN," & strUserAttr
+  Set objRecordSet  = objADOCmd.Execute
+  Select Case True
+    Case objRecordset Is Nothing
+      ' Nothing
+    Case IsNull(objRecordset)
+      ' Nothing
+    Case objRecordset.RecordCount = 0 
+      ' Nothing
+    Case IsNull(objRecordset.Fields(1).Value)
+      ' Nothing
+    Case Else
+      strAttrValue  = objRecordset.Fields(1).Value
+  End Select
+
+  Select Case True
+    Case strUserAttr = "msDS-GroupMSAMembership"
+      strAttrValue  = OctetToHexStr(strAttrValue)
+    Case Instr(strUserAttr, "SID") > 0
+      strAttrValue  = OctetToHexStr(strAttrValue)
+      strAttrValue  = HexStrToSIDStr(strAttrValue)
+    Case Instr(strUserAttr, "GUID") > 0
+      strAttrValue  = OctetToHexStr(strAttrValue)
+      strAttrValue  = HexStrToGUID(strAttrValue)
+  End Select
+
+  objRecordset.Close
+  err.Number        = 0
+  GetUserAttr       = strAttrValue
+
+End Function
+
+
+Private Function OctetToHexStr(strValue)
+  Dim strHexStr
+  Dim intIdx
+
+  strHexStr         = ""
+  For intIdx = 1 To Lenb(strValue)
+    strHexStr       = strHexStr & Right("0" & Hex(Ascb(Midb(strValue, intIdx, 1))), 2)
+  Next
+
+  OctetToHexStr     = strHexStr
+
+End Function
+
+
+Private Function HexStrToGUID(strValue)
+  Dim strGUID
+
+  strGUID           = ""
+
+  If Len(strValue) = 32 Then
+    strGUID         = strGUID & Mid(strValue,  7, 2) & Mid(strValue,  5, 2) & Mid(strValue,  3, 2) & Mid(strValue,  1, 2) & "-"
+    strGUID         = strGUID & Mid(strValue, 11, 2) & Mid(strValue,  9, 2) & "-"
+    strGUID         = strGUID & Mid(strValue, 15, 2) & Mid(strValue, 13, 2) & "-"
+    strGUID         = strGUID & Mid(strValue, 17, 2) & Mid(strValue, 19, 2) & "-"
+    strGUID         = strGUID & Mid(strValue, 21)
+  End If
+
+  HexStrToGUID      = strGUID
+
+End Function
+
+
+Private Function HexStrToSIDStr(strValue)
+  Dim arrSID
+  Dim strSIDStr
+  Dim intIdx, intUB, intWork
+
+  intUB             = (Len(strValue) / 2) - 1
+  ReDim arrSID(intUB)  
+  For intIdx = 0 To intUB
+    arrSID(intIdx)  = CInt("&H" & Mid(strValue, (intIdx * 2) + 1, 2))
+  Next
+
+  strSIDStr         = "S-" & arrSID(0) & "-" & arrSID(1) & "-" & arrSID(8)
+  If intUB >= 15 Then
+    intWork         = arrSID(15)
+    intWork         = (intWork * 256) + arrSID(14)
+    intWork         = (intWork * 256) + arrSID(13)
+    intWork         = (intWork * 256) + arrSID(12)
+    strSIDStr       = strSIDStr & "-" & CStr(intWork)
+    If intUB >= 22 Then
+      intWork       = arrSID(19)
+      intWork       = (intWork * 256) + arrSID(18)
+      intWork       = (intWork * 256) + arrSID(17)
+      intWork       = (intWork * 256) + arrSID(16)
+      strSIDStr     = strSIDStr & "-" & CStr(intWork)
+      intWork       = arrSID(23)
+      intWork       = (intWork * 256) + arrSID(22)
+      intWork       = (intWork * 256) + arrSID(21)
+      intWork       = (intWork * 256) + arrSID(20)
+      strSIDStr     = strSIDStr & "-" & CStr(intWork)
+    End If
+    If intUB >= 25 Then
+      intWork       = arrSID(25)
+      intWork       = (intWork * 256) + arrSID(24)
+      strSIDStr     = strSIDStr & "-" & CStr(intWork)
+    End If
+  End If
+
+  HexStrToSIDStr    = strSIDStr
+
+End Function
+
+
 Function Max(intA, intB)
 
   Select Case True
@@ -241,7 +375,7 @@ Sub RunCacls(strCmd)
     Exit Sub
   End If
 
-  Call Util_RunExec(GetBuildfileValue("ProgCacls") & " " & strCmd, "", strResponseYes, -1)
+  Call Util_RunExec(strProgCacls & " " & strCmd, "", strResponseYes, -1)
   Select Case True
     Case intErrSave = 0
       ' Nothing
@@ -258,7 +392,7 @@ Sub RunCacls(strCmd)
     Case Else
       Call SetBuildMessage(strMsgError, "Error " & Cstr(intErrSave) & " " & strErrSave & " returned by " & strCmd)
   End Select
-  Wscript.Sleep GetBuildfileValue("WaitShort") ' Allow time for CACLS processing to complete
+  Wscript.Sleep strWaitShort ' Allow time for CACLS processing to complete
 
 End Sub
 
@@ -546,14 +680,12 @@ Sub Util_RunExec(strCmd, strMessage, strResponse, strOK)
   Call DebugLog("Util_RunExec: " & strCmd)
   Dim objCmd
   Dim intCount, intEOS
-  Dim strBox1, strBox2, strProgCacls, strStdOut, strWaitShort
+  Dim strBox1, strBox2, strStdOut
 
   On Error Resume Next
   err.Clear
   strBox1           = "[" & strResponseYes & "/" & strResponseNo & "]"
   strBox2           = "(" & strResponseYes & "/" & strResponseNo & ")?"
-  strProgCacls      = GetBuildfileValue("ProgCacls")
-  strWaitShort      = GetBuildfileValue("WaitShort")
   Set objCmd        = objShell.Exec(strCmd)
   Select Case True
     Case Not IsObject(objCmd)
@@ -652,6 +784,10 @@ End Function
 
 Function FormatServer(strServer, strProtocol)
   FormatServer      = FBUtils.FormatServer(strServer, strProtocol)
+End Function
+
+Function GetUserAttr(strUserAccount, strUserDnsDomain, strUserAttr)
+  GetUserAttr       = FBUtils.GetUserAttr(strUserAccount, strUserDnsDomain, strUserAttr)
 End Function
 
 Function Max(intA, intB)
