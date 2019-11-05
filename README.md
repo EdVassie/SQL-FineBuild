@@ -14,7 +14,7 @@ Changes compared to v3.4.2 and v3.4.1:
 
 * Various small bug fixes
 * Added parameter /ClusWinSuffix:
-* Added support for SQL Server 2019 CTP2
+* Added support for SQL Server 2019 RC1
 * Added support for Windows Server 2019
 
 Changes compared to v3.4.1 and v3.4.0:
