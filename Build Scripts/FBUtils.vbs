@@ -159,8 +159,8 @@ Function FormatServer(strServer, strProtocol)
 End Function
 
 
-Function GetUserAttr(strUserAccount, strUserDnsDomain, strUserAttr)
-  Call DebugLog("GetUserAttr: " & strUserAccount & ", " & strUserAttr)
+Function GetAccountAttr(strUserAccount, strUserDnsDomain, strUserAttr)
+  Call DebugLog("GetAccountAttr: " & strUserAccount & ", " & strUserAttr)
   Dim objField, objRecordSet
   Dim strAccount,strAttrObject, strAttrValue
   Dim intIdx
@@ -204,7 +204,7 @@ Function GetUserAttr(strUserAccount, strUserDnsDomain, strUserAttr)
 
   objRecordset.Close
   err.Number        = 0
-  GetUserAttr       = strAttrValue
+  GetAccountAttr       = strAttrValue
 
 End Function
 
@@ -786,8 +786,8 @@ Function FormatServer(strServer, strProtocol)
   FormatServer      = FBUtils.FormatServer(strServer, strProtocol)
 End Function
 
-Function GetUserAttr(strUserAccount, strUserDnsDomain, strUserAttr)
-  GetUserAttr       = FBUtils.GetUserAttr(strUserAccount, strUserDnsDomain, strUserAttr)
+Function GetAccountAttr(strUserAccount, strUserDnsDomain, strUserAttr)
+  GetAccountAttr       = FBUtils.GetAccountAttr(strUserAccount, strUserDnsDomain, strUserAttr)
 End Function
 
 Function Max(intA, intB)

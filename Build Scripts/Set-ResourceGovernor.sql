@@ -1,4 +1,4 @@
--- Copyright FineBuild Team © 2016 - 2018.  Distributed under Ms-Pl License
+-- Copyright FineBuild Team © 2016 - 2019.  Distributed under Ms-Pl License
 USE [master]
 GO
 -- Get variable data
@@ -335,6 +335,7 @@ GO
   CREATE FUNCTION [dbo].[FB_ResourceGovernorClassifier]()
   RETURNS SYSNAME
   WITH SCHEMABINDING
+  -- Copyright FineBuild Team © 2016 - 2019.  Distributed under Ms-Pl License
   AS
   BEGIN;
     DECLARE
@@ -344,14 +345,15 @@ GO
     ,@JobId             uniqueidentifier
     ,@JobName           nvarchar(256)
     ,@RunTime           datetime
-    ,@Time              Char(5)
+    ,@Time              char(5)
     ,@WorkloadGroup     sysname;
 
     SELECT 
-      @AppNameBase    = APP_NAME()
-     ,@DBName         = ORIGINAL_DB_NAME()
-     ,@JobId          = CASE WHEN @AppNameBase LIKE 'SQLAgent%Jobstep%' THEN Cast(Convert(binary(16), Substring(@AppNameBase, CHARINDEX('(Job 0x', @AppNameBase) + 5, 34), 1) as uniqueidentifier) END
-     ,@AppName        = CASE WHEN @AppNameBase LIKE '.Net SqlClient%' THEN 'OLTP'
+     @AppNameBase     = APP_NAME()
+    ,@DBName          = ORIGINAL_DB_NAME()
+    ,@JobId           = CASE WHEN @AppNameBase LIKE 'SQLAgent%Jobstep%' THEN Cast(Convert(binary(16), Substring(@AppNameBase, CHARINDEX('(Job 0x', @AppNameBase) + 5, 34), 1) as uniqueidentifier) ELSE NULL END
+    ,@AppName         = CASE WHEN @AppNameBase LIKE '.Net SqlClient%' THEN 'OLTP'
+                             WHEN @AppNameBase LIKE '%mpdwsvc%' THEN 'Analytics'
                              WHEN @AppNameBase LIKE 'RCSmall%' THEN 'Analytics'
                              WHEN @AppNameBase LIKE 'RTerm.exe' THEN 'Analytics'
                              WHEN @AppNameBase LIKE 'BxlServer.exe' THEN 'Analytics'
@@ -369,29 +371,32 @@ GO
                              WHEN @AppNameBase LIKE 'SQLAgent%' THEN 'System'
                              WHEN @AppNameBase LIKE 'SQL Server CEIP%' THEN 'System'
                              WHEN @AppNameBase LIKE 'SQL Server Data Collector%' THEN 'System'
+                             WHEN @AppNameBase LIKE 'TransactionMannager%' THEN 'System'
                              ELSE @AppNameBase END
-     ,@AppName        = CASE WHEN @AppName <> 'Adhoc' THEN @AppName
+    ,@AppName         = CASE WHEN @AppName <> 'Adhoc' THEN @AppName
                              WHEN IS_SRVROLEMEMBER('sysadmin') = 1 THEN 'DBA'
                              ELSE @AppName END
-     ,@RunTime        = Getdate()
-     ,@Time           = Convert(Char(5), @Runtime, 14);
+    ,@RunTime         = Getdate()
+    ,@Time            = Convert(Char(5), @Runtime, 14);
 
     IF @JobId IS NOT NULL
     BEGIN;
-      SELECT @AppName = ISNULL(AppName, @AppName)
+      SELECT 
+       @AppName       = ISNULL(AppName, @AppName)
       FROM dbo.FB_sysjobnames
-      WHERE job_id = @JobId;
+      WHERE job_id    = @JobId;
     END;
 
     SELECT TOP 1
-      @WorkloadGroup = WorkloadGroup
-    FROM [dbo].[FB_ResourceGovernorClasses]
-    WHERE @AppName   = ISNULL([AppName],@AppName)
-      AND @DBName    = ISNULL([DBName],@DBName)
-      AND @Time      BETWEEN [TimeStart] AND [TimeEnd]
-    ORDER BY [AppName] Desc,[DBName] Desc;
+      @WorkloadGroup  = WorkloadGroup
+    FROM dbo.FB_ResourceGovernorClasses
+    WHERE @AppName    = ISNULL(AppName,@AppName)
+      AND @DBName     = ISNULL(DBName,@DBName)
+      AND @Time       BETWEEN TimeStart AND TimeEnd
+    ORDER BY AppName Desc, DBName Desc;
 
    RETURN @WorkloadGroup;
+
  END;
 GO
 

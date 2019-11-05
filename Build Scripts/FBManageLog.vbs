@@ -20,7 +20,7 @@ Dim FBManageLog: Set FBManageLog = New FBManageLogClass
 
 Dim objLogFile
 Dim strCmd, strDebug, strDebugDesc, strDebugMsg1, strDebugMsg2
-Dim strMsgError, strMsgWarning, strMsgInfo
+Dim strMsgError, strMsgWarning, strMsgIgnore, strMsgInfo
 Dim strProcessId, strProcessIdCode, strProcessIdDesc, strProcessIdLabel
 Dim strSetupLog, strStatusBypassed, strStatusComplete, strStatusFail, strStatusManual, strStatusPreConfig, strStatusProgress
 
@@ -184,6 +184,7 @@ Private Sub LogSetup()
       Set objLogFile     = objFSO.GetFile(Replace(strLogTxt, """", ""))
       strDebug           = GetBuildfileValue("Debug")
       strMsgError        = GetBuildfileValue("MsgError")
+      strMsgIgnore       = GetBuildfileValue("MsgIgnore")
       strMsgInfo         = GetBuildfileValue("MsgInfo")
       strMsgWarning      = GetBuildfileValue("MsgWarning")
       strProcessId       = GetBuildfileValue("ProcessId")
@@ -305,7 +306,7 @@ End Sub
 Sub ProcessEnd(strStatus)
 
   If strStatus <> "" Then
-    Call LogWrite(" " & strProcessIdDesc & strStatusComplete)
+    Call LogWrite(" " & strProcessIdDesc & strStatus)
   End If
 
   If (strStopAt = "AUTO") Or (strStopAt <> "" And strStopAt <= strProcessIdLabel) Then

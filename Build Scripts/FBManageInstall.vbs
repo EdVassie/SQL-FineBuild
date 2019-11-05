@@ -86,7 +86,7 @@ Sub RunInstall(strInstName, strInstFile, objInstParm)
       Select Case True
         Case intErrSave = 0
           ' Nothing
-        Case UCase(strInstallError) = "IGNORE"
+        Case UCase(strInstallError) = strMsgIgnore
           ' Nothing
         Case Else
           Call SetBuildMessage(strInstallError, "SETUP" & strInstName & ": " & Cstr(intErrSave) & " " & strErrSave & " returned by " & strPathInst)
@@ -602,7 +602,7 @@ Private Sub RunInstall_Menu(strInstName, objInstParm)
       strDebugMsg2  = "Target: " & strPathNew
       Select Case True
         Case Not objFSO.FileExists(strPathOld)
-          If UCase(strMenuError) <> "IGNORE" Then
+          If UCase(strMenuError) <> strMsgIgnore Then
             Call SetBuildMessage(strMenuError, "SETUP" & strInstName & ": " & strMenuName & " Menu source file not found " & strPathOld)
           End If
           Exit Sub
