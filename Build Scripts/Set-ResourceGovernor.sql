@@ -82,7 +82,7 @@ IF NOT EXISTS ( SELECT name FROM sys.resource_governor_resource_pools WHERE name
 BEGIN;
   SELECT @SQL = 
   'CREATE RESOURCE POOL [OLTP]
-     WITH(min_cpu_percent=0
+     WITH(min_cpu_percent=5
 	,max_cpu_percent=100
 	,min_memory_percent=0
 	,max_memory_percent=100'
@@ -289,15 +289,15 @@ IF NOT EXISTS (SELECT 1 FROM [dbo].[FB_ResourceGovernorClasses] WHERE [AppName] 
     ([AppName],[DBName],[TimeStart],[TimeEnd],[WorkloadGroup])
     VALUES (N'AdHoc',NULL,'00:00','24:00','AdHoc');
 
-IF NOT EXISTS (SELECT 1 FROM [dbo].[FB_ResourceGovernorClasses] WHERE [AppName] = N'Batch' AND [WorkloadGroup] = N'BatchNight')
-  INSERT INTO [dbo].[FB_ResourceGovernorClasses]
-    ([AppName],[DBName],[TimeStart],[TimeEnd],[WorkloadGroup])
-    VALUES (N'Batch',NULL,'18:00','07:00','BatchNight');
-
 IF NOT EXISTS (SELECT 1 FROM [dbo].[FB_ResourceGovernorClasses] WHERE [AppName] = N'Batch' AND [WorkloadGroup] = N'BatchDay')
   INSERT INTO [dbo].[FB_ResourceGovernorClasses]
     ([AppName],[DBName],[TimeStart],[TimeEnd],[WorkloadGroup])
     VALUES (N'Batch',NULL,'07:00','18:00','BatchDay');
+
+IF NOT EXISTS (SELECT 1 FROM [dbo].[FB_ResourceGovernorClasses] WHERE [AppName] = N'Batch' AND [WorkloadGroup] = N'BatchNight')
+  INSERT INTO [dbo].[FB_ResourceGovernorClasses]
+    ([AppName],[DBName],[TimeStart],[TimeEnd],[WorkloadGroup])
+    VALUES (N'Batch',NULL,'18:00','07:00','BatchNight');
 
 IF NOT EXISTS (SELECT 1 FROM [dbo].[FB_ResourceGovernorClasses] WHERE [AppName] = N'BatchMaint' AND [WorkloadGroup] = N'BatchMaint')
   INSERT INTO [dbo].[FB_ResourceGovernorClasses]
@@ -309,10 +309,10 @@ IF NOT EXISTS (SELECT 1 FROM [dbo].[FB_ResourceGovernorClasses] WHERE [AppName] 
     ([AppName],[DBName],[TimeStart],[TimeEnd],[WorkloadGroup])
     VALUES ('DBA',NULL,'00:00','24:00','DBA');
 
-IF NOT EXISTS (SELECT 1 FROM [dbo].[FB_ResourceGovernorClasses] WHERE [AppName] = N'OLTP')
+IF NOT EXISTS (SELECT 1 FROM [dbo].[FB_ResourceGovernorClasses] WHERE [AppName] = N'OLTP' AND [WorkloadGroup] = N'OLTP')
   INSERT INTO [dbo].[FB_ResourceGovernorClasses]
     ([AppName],[DBName],[TimeStart],[TimeEnd],[WorkloadGroup])
-    VALUES (N'OLTP',NULL,'00:00','24:00','OLTP');
+    VALUES (N'OLTP',NULL,'07:00','18:00','OLTP');
 
 IF NOT EXISTS (SELECT 1 FROM [dbo].[FB_ResourceGovernorClasses] WHERE [AppName] = N'Report')
   INSERT INTO [dbo].[FB_ResourceGovernorClasses]
@@ -365,7 +365,9 @@ GO
                              WHEN @JobId IS NOT NULL AND @DBName = 'msdb' THEN 'System'
                              WHEN @JobId IS NOT NULL THEN 'Batch'
                              WHEN @AppNameBase LIKE '%Report%' THEN 'Report'
+                             WHEN @AppNameBase LIKE 'RSPowerBI%' THEN 'Report'
                              WHEN @AppNameBase LIKE 'DQ Services%' THEN 'System'
+                             WHEN @AppNameBase LIKE 'DWDiagnostics%' THEN 'System'
                              WHEN @AppNameBase LIKE 'DatabaseMail%' THEN 'System'
                              WHEN @AppNameBase LIKE 'Microsoft%Windows%' THEN 'System'
                              WHEN @AppNameBase LIKE 'SQLAgent%' THEN 'System'

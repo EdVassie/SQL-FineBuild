@@ -1,7 +1,7 @@
 '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 '
 '  FBManageService.vbs  
-'  Copyright FineBuild Team © 2018.  Distributed under Ms-Pl License
+'  Copyright FineBuild Team © 2018 - 2019.  Distributed under Ms-Pl License
 '
 '  Purpose:      Start and Stop SQL Server Services 
 '
@@ -298,6 +298,8 @@ Sub StartSSRS(strOpt)
       Call Util_RunExec("NET START " & GetBuildfileValue("InstRS"), "", "", 2)
       Call CheckRSReady()
   End Select
+
+  Wscript.Sleep strWaitShort
 
 End Sub
 

@@ -1,7 +1,7 @@
 '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 '
 '  FBManageBuildFile.vbs  
-'  Copyright FineBuild Team © 2017.  Distributed under Ms-Pl License
+'  Copyright FineBuild Team © 2017 - 2019.  Distributed under Ms-Pl License
 '
 '  Purpose:      Manage the FineBuild Buildfile 
 '
@@ -12,18 +12,18 @@
 '  Change History
 '  Version  Author        Date         Description
 '  1.0      Ed Vassie     05 Jul 2017  Initial version
-
+'  1.1      Ed Vassie     12 Nov 2019  Added Statusfile processing
 '
 '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 Option Explicit
 Dim FBManageBuildFile: Set FBManageBuildFile = New FBManageBuildFileClass
-Dim objBuildFile
+Dim objBuildFile, objStatusfile
 
 Class FBManageBuildFileClass
-Dim colBuildfile, colMessage
+Dim colBuildfile, colMessage, colStatusfile
 Dim objAttribute, objMessages
 Dim intBuildMsg, intFound
-Dim strBuildfile, strMessageOut, strMessagePrefix, strMessageRead, strProcessId, strValue
+Dim strBuildfile, strMessageOut, strMessagePrefix, strMessageRead, strProcessId, strStatusfile, strValue
 
 
 Private Sub Class_Initialize
@@ -31,6 +31,7 @@ Private Sub Class_Initialize
   Dim objShell
 
   Set objBuildFile  = CreateObject("Microsoft.XMLDOM") 
+  Set objStatusFile = CreateObject("Microsoft.XMLDOM") 
   Set objShell      = CreateObject("Wscript.Shell")
 
   strBuildFile      = objShell.ExpandEnvironmentStrings("%SQLLOGTXT%")
@@ -38,10 +39,15 @@ Private Sub Class_Initialize
     Exit Sub
   End If
 
-  strBuildFile      = Mid(strBuildFile, 2, Len(strBuildFile) - 6) & ".xml"
-  objBuildFile.async = False
+  strBuildFile        = Mid(strBuildFile, 2, Len(strBuildFile) - 6) & ".xml"
+  objBuildFile.async  = False
   objBuildfile.load(strBuildFile)
-  Set colBuildFile  = objBuildfile.documentElement.selectSingleNode("BuildFile")
+  Set colBuildFile    = objBuildfile.documentElement.selectSingleNode("BuildFile")
+
+'  strStatusfile       = Mid(strStatusfile, 2, Len(strStatusfile) - 6) & ".xml"
+'  objStatusfile.async = False
+'  objStatusfile.load(strStatusfile)
+'  Set colStatusfile   = objStatusfile.documentElement.selectSingleNode("Statusfile")
 
 End Sub
 
@@ -145,6 +151,44 @@ Sub SetBuildMessage(strType, strMessage)
 End Sub
 
 
+Function GetStatusfileValue(strParam) 
+' Get value from Statusfile
+
+  Select Case True
+    Case IsNull(colStatusfile.getAttribute(strParam))
+      strValue      = ""
+    Case Else
+      strValue      = colStatusfile.getAttribute(strParam)
+  End Select
+
+  GetStatusfileValue = strValue
+
+End Function
+
+
+Sub SetStatusfileValue(strName, strValue)
+  Call DebugLog("Set Statusfile value " & strName & ": " & strValue)
+  ' Code based on http://www.vbforums.com/showthread.php?t=480935
+
+  If IsNull(strValue) Then
+    strValue        = ""
+  End If
+
+  Select Case True
+    Case IsNull(colStatusfile.getAttribute(strName))
+      colStatusfile.setAttribute strName, strValue
+    Case Else
+      Set objAttribute  = objStatusfile.createAttribute(strName)
+      objAttribute.Text = strValue
+      colStatusfile.Attributes.setNamedItem objAttribute
+      objStatusfile.documentElement.appendChild colStatusfile
+  End Select
+
+  objStatusfile.save strStatusFile
+
+End Sub
+
+
 End Class
 
 Function GetBuildfileValue(strParam)
@@ -157,4 +201,12 @@ End Sub
 
 Sub SetBuildMessage(strType, strMessage)
   Call FBManageBuildFile.SetBuildMessage(strType, strMessage)
+End Sub
+
+Function GetStatusfileValue(strParam)
+  GetStatusfileValue = FBManageBuildfile.GetStatusfileValue(strParam)
+End Function
+
+Sub SetStatusfileValue(strName, strValue)
+  Call FBManageBuildfile.SetStatusfileValue(strName, strValue)
 End Sub

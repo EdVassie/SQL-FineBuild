@@ -201,7 +201,7 @@ Private Sub SetupClusterNetwork(strProcess, strClusterGroup, strResourceName, st
 
   strDNSName        = Left(strClusterGroup, Instr(strClusterGroup & " ", " ") - 1)
   strCmd            = "CLUSTER """ & strClusterName & """ RESOURCE """ & strNetworkName & """ /CREATE /GROUP:""" & strClusterGroup & """ /TYPE:""Network Name"" /PRIV DNSNAME=""" & strDNSName & """"
-  If strOSVersion < "6.3X" Then
+  If strOSVersion < "6.3A" Then
     strCmd          = strCmd & " /PRIV NAME=""" & strDNSName & """"
   End If
   Call Util_RunExec(strCmd, "", strResponseYes, 5010)
