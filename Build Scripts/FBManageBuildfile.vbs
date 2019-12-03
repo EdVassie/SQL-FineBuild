@@ -12,42 +12,37 @@
 '  Change History
 '  Version  Author        Date         Description
 '  1.0      Ed Vassie     05 Jul 2017  Initial version
-'  1.1      Ed Vassie     12 Nov 2019  Added Statusfile processing
+'  1.1      Ed Vassie     12 Nov 2019  Added Statefile processing
 '
 '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 Option Explicit
 Dim FBManageBuildFile: Set FBManageBuildFile = New FBManageBuildFileClass
-Dim objBuildFile, objStatusfile
+Dim objBuildFile
 
 Class FBManageBuildFileClass
-Dim colBuildfile, colMessage, colStatusfile
-Dim objAttribute, objMessages
+Dim colBuildfile, colMessage, colStatefile
+Dim objAttribute, objMessages, objStatefile
 Dim intBuildMsg, intFound
-Dim strBuildfile, strMessageOut, strMessagePrefix, strMessageRead, strProcessId, strStatusfile, strValue
+Dim strBuildfile, strPathFBStart, strMessageOut, strMessagePrefix, strMessageRead, strProcessId, strStatefile, strValue
 
 
 Private Sub Class_Initialize
 ' Perform Initialisation processing
   Dim objShell
 
-  Set objBuildFile  = CreateObject("Microsoft.XMLDOM") 
-  Set objStatusFile = CreateObject("Microsoft.XMLDOM") 
+  Set objBuildfile  = CreateObject("Microsoft.XMLDOM") 
+  Set objStatefile  = CreateObject("Microsoft.XMLDOM") 
   Set objShell      = CreateObject("Wscript.Shell")
 
-  strBuildFile      = objShell.ExpandEnvironmentStrings("%SQLLOGTXT%")
-  If strBuildFile = "%SQLLOGTXT%" Then
+  strBuildfile      = objShell.ExpandEnvironmentStrings("%SQLLOGTXT%")
+  If strBuildfile = "%SQLLOGTXT%" Then
     Exit Sub
   End If
 
-  strBuildFile        = Mid(strBuildFile, 2, Len(strBuildFile) - 6) & ".xml"
-  objBuildFile.async  = False
+  strBuildfile        = Mid(strBuildfile, 2, Len(strBuildfile) - 6) & ".xml"
+  objBuildfile.async  = False
   objBuildfile.load(strBuildFile)
-  Set colBuildFile    = objBuildfile.documentElement.selectSingleNode("BuildFile")
-
-'  strStatusfile       = Mid(strStatusfile, 2, Len(strStatusfile) - 6) & ".xml"
-'  objStatusfile.async = False
-'  objStatusfile.load(strStatusfile)
-'  Set colStatusfile   = objStatusfile.documentElement.selectSingleNode("Statusfile")
+  Set colBuildfile    = objBuildfile.documentElement.selectSingleNode("BuildFile")
 
 End Sub
 
@@ -151,40 +146,54 @@ Sub SetBuildMessage(strType, strMessage)
 End Sub
 
 
-Function GetStatusfileValue(strParam) 
-' Get value from Statusfile
+Function GetStatefileValue(strParam) 
+' Get value from Statefile
+
+  If Not IsObject(colStatefile) Then
+    strStatefile        = GetBuildfileValue("Statefile")
+    objStatefile.async  = False
+    objStatefile.load(strStateFile)
+    Set colStatefile    = objStatefile.documentElement.selectSingleNode("FineBuildState")    
+  End If
 
   Select Case True
-    Case IsNull(colStatusfile.getAttribute(strParam))
+    Case IsNull(colStatefile.getAttribute(strParam))
       strValue      = ""
     Case Else
-      strValue      = colStatusfile.getAttribute(strParam)
+      strValue      = colStatefile.getAttribute(strParam)
   End Select
 
-  GetStatusfileValue = strValue
+  GetStatefileValue = strValue
 
 End Function
 
 
-Sub SetStatusfileValue(strName, strValue)
-  Call DebugLog("Set Statusfile value " & strName & ": " & strValue)
+Sub SetStatefileValue(strName, strValue)
+  Call DebugLog("Set Statefile value " & strName & ": " & strValue)
   ' Code based on http://www.vbforums.com/showthread.php?t=480935
+
+  If Not IsObject(colStatefile) Then
+    strStatefile        = GetBuildfileValue("Statefile")
+    objStatefile.async  = False
+    objStatefile.load(strStateFile)
+    Set colStatefile    = objStatefile.documentElement.selectSingleNode("FineBuildState")  
+  End If
 
   If IsNull(strValue) Then
     strValue        = ""
   End If
 
   Select Case True
-    Case IsNull(colStatusfile.getAttribute(strName))
-      colStatusfile.setAttribute strName, strValue
+    Case IsNull(colStatefile.getAttribute(strName))
+      colStatefile.setAttribute strName, strValue
     Case Else
-      Set objAttribute  = objStatusfile.createAttribute(strName)
+      Set objAttribute  = objStatefile.createAttribute(strName)
       objAttribute.Text = strValue
-      colStatusfile.Attributes.setNamedItem objAttribute
-      objStatusfile.documentElement.appendChild colStatusfile
+      colStatefile.Attributes.setNamedItem objAttribute
+      objStatefile.documentElement.appendChild colStatefile
   End Select
 
-  objStatusfile.save strStatusFile
+  objStatefile.save strStatefile
 
 End Sub
 
@@ -203,10 +212,10 @@ Sub SetBuildMessage(strType, strMessage)
   Call FBManageBuildFile.SetBuildMessage(strType, strMessage)
 End Sub
 
-Function GetStatusfileValue(strParam)
-  GetStatusfileValue = FBManageBuildfile.GetStatusfileValue(strParam)
+Function GetStatefileValue(strParam)
+  GetStatefileValue = FBManageBuildfile.GetStatefileValue(strParam)
 End Function
 
-Sub SetStatusfileValue(strName, strValue)
-  Call FBManageBuildfile.SetStatusfileValue(strName, strValue)
+Sub SetStatefileValue(strName, strValue)
+  Call FBManageBuildfile.SetStatefileValue(strName, strValue)
 End Sub

@@ -252,6 +252,7 @@ BEGIN;
   CREATE TABLE [dbo].[FB_ResourceGovernorClasses]
   ([Id]                 [int] IDENTITY(1,1) NOT NULL
   ,[AppName]            [nvarchar](256) NULL
+  ,[Host]               [nvarchar](256) NULL
   ,[DBName]             [nvarchar](256) NULL
   ,[TimeStart]          [char](5) NOT NULL
   ,[TimeEnd]            [char](5) NOT NULL
@@ -342,6 +343,7 @@ GO
      @AppNameBase       nvarchar(256)
     ,@AppName           nvarchar(256)
     ,@DBName            nvarchar(256)
+    ,@Host              nvarchar(256)
     ,@JobId             uniqueidentifier
     ,@JobName           nvarchar(256)
     ,@RunTime           datetime
@@ -378,6 +380,7 @@ GO
     ,@AppName         = CASE WHEN @AppName <> 'Adhoc' THEN @AppName
                              WHEN IS_SRVROLEMEMBER('sysadmin') = 1 THEN 'DBA'
                              ELSE @AppName END
+    ,@Host            = ''
     ,@RunTime         = Getdate()
     ,@Time            = Convert(Char(5), @Runtime, 14);
 
@@ -392,10 +395,11 @@ GO
     SELECT TOP 1
       @WorkloadGroup  = WorkloadGroup
     FROM dbo.FB_ResourceGovernorClasses
-    WHERE @AppName    = ISNULL(AppName,@AppName)
-      AND @DBName     = ISNULL(DBName,@DBName)
+    WHERE @AppName    LIKE ISNULL(AppName,@AppName)
+      AND @Host       LIKE ISNULL(Host,@Host)
+      AND @DBName     LIKE ISNULL(DBName,@DBName)
       AND @Time       BETWEEN TimeStart AND TimeEnd
-    ORDER BY AppName Desc, DBName Desc;
+    ORDER BY AppName Desc, Host Desc, DBName Desc;
 
    RETURN @WorkloadGroup;
 
