@@ -22,7 +22,7 @@ Dim strHKCR, strHKLM, strErrSave, strResponseYes, strResponseNo
 
 Class FBUtilsClass
 
-Dim objADOCmd, objADOConn, objAutoUpdate, objFile, objFSO, objSDHelper, objShell, objWMI, objWMIReg
+Dim objADOCmd, objADOConn, objAutoUpdate, objFile, objFSO, objShell, objWMI, objWMIReg
 Dim colPrcEnvVars
 Dim strCmd, strCmdPS, strGroupDBA, strGroupDBANonSA, strIsInstallDBA, strOSVersion, strPath, strProgCacls, strServer, strSIDDistComUsers, strUserAccount, strWaitShort
 Dim intIdx
@@ -60,7 +60,6 @@ Private Sub Class_Initialize
   objADOConn.Provider            = "ADsDSOObject"
   objADOConn.Open "ADs Provider"
   Set objADOCmd.ActiveConnection = objADOConn
-  Set objSDHelper   = objWMI.Get("Win32_SecurityDescriptorHelper")
 
 End Sub
 
@@ -161,8 +160,8 @@ End Function
 
 Function GetAccountAttr(strUserAccount, strUserDnsDomain, strUserAttr)
   Call DebugLog("GetAccountAttr: " & strUserAccount & ", " & strUserAttr)
-  Dim objField, objRecordSet
-  Dim strAccount,strAttrObject, strAttrValue
+  Dim objACE, objAttr, objDACL, objField, objRecordSet
+  Dim strAccount,strAttrObject, strAttrItem, strAttrList, strAttrValue
   Dim intIdx
  
   strAttrValue      = ""
@@ -176,7 +175,7 @@ Function GetAccountAttr(strUserAccount, strUserDnsDomain, strUserAttr)
    End Select
 
   On Error Resume Next 
-  objADOCmd.CommandText          = "<LDAP://DC=" & Replace(strUserDnsDomain, ".", ",DC=") & ">;(&(sAMAccountName=" & strAccount & "));CN," & strUserAttr
+  objADOCmd.CommandText          = "<LDAP://DC=" & Replace(strUserDnsDomain, ".", ",DC=") & ">;(&(sAMAccountName=" & strAccount & "));distinguishedName," & strUserAttr
   Set objRecordSet  = objADOCmd.Execute
   Select Case True
     Case objRecordset Is Nothing
@@ -193,13 +192,25 @@ Function GetAccountAttr(strUserAccount, strUserDnsDomain, strUserAttr)
 
   Select Case True
     Case strUserAttr = "msDS-GroupMSAMembership"
-      strAttrValue  = OctetToHexStr(strAttrValue)
+      Set objField  = GetObject("LDAP://" & objRecordset.Fields(0).Value)
+      Set objAttr   = objField.Get("msDS-GroupMSAMembership")
+      Set objDACL   = objSAttr.DiscretionaryAcl
+      strAttrValue  = ">"
+      For Each objACE In objDACL
+        strAttrValue = strAttrValue & objACE.Trustee & " "
+      Next
     Case Instr(strUserAttr, "SID") > 0
       strAttrValue  = OctetToHexStr(strAttrValue)
       strAttrValue  = HexStrToSIDStr(strAttrValue)
     Case Instr(strUserAttr, "GUID") > 0
       strAttrValue  = OctetToHexStr(strAttrValue)
       strAttrValue  = HexStrToGUID(strAttrValue)
+    Case strUserAttr = "MemberOf"
+      strAttrList   = ""
+      For Each strAttrItem In strAttrValue
+        strAttrList = strAttrList & Mid(strAttrItem, 4, Instr(strAttrItem, ",") - 4) & " "
+      Next
+      strAttrValue = RTrim(strAttrList)
   End Select
 
   objRecordset.Close

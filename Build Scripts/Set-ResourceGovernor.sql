@@ -380,7 +380,7 @@ GO
     ,@AppName         = CASE WHEN @AppName <> 'Adhoc' THEN @AppName
                              WHEN IS_SRVROLEMEMBER('sysadmin') = 1 THEN 'DBA'
                              ELSE @AppName END
-    ,@Host            = ''
+    ,@Host            = HOST_NAME()
     ,@RunTime         = Getdate()
     ,@Time            = Convert(Char(5), @Runtime, 14);
 
