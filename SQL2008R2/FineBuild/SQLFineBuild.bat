@@ -1,6 +1,6 @@
 @ECHO OFF
 REM SQL FineBuild   
-REM Copyright FineBuild Team © 2008 - 2019.  Distributed under Ms-Pl License
+REM Copyright FineBuild Team © 2008 - 2020.  Distributed under Ms-Pl License
 REM
 REM Created 30 Jun 2008 by Ed Vassie V1.0 
 
@@ -34,7 +34,7 @@ GOTO :RUN
 %SQLFBDEBUG% %TIME:~0,8% Run the install
 ECHO.
 ECHO SQL FineBuild %SQLFBVERSION% for %SQLVERSION%
-ECHO Copyright FineBuild Team (c) 2008 - 2019.  Distributed under Ms-Pl License
+ECHO Copyright FineBuild Team (c) 2008 - %DATE:~6,4%.  Distributed under Ms-Pl License
 ECHO SQL FineBuild Wiki: https://github.com/SQL-FineBuild/Common/wiki
 ECHO Run on %COMPUTERNAME% by %USERNAME% at %TIME:~0,8% on %DATE%:
 ECHO %0 %SQLFBPARM%
@@ -107,6 +107,13 @@ IF %SQLRC% == 1 SET SQLRC=0
 IF %SQLRC% NEQ 0 ECHO Process TEMP var failed
 IF %SQLRC% NEQ 0 GOTO :ERROR
 SET TMP=%TEMP%
+
+%SQLFBDEBUG% %TIME:~0,8% Refresh PSMODULEPATH value
+FOR /F "usebackq tokens=*" %%X IN (`CSCRIPT //nologo "%SQLFBFOLDER%\Build Scripts\FBConfigVar.vbs" /VarName:PathPS %SQLFBPARM% %SQLDEBUG%`) DO (SET PSModulePath=%%X)
+SET SQLRC=%ERRORLEVEL%
+IF %SQLRC% == 1 SET SQLRC=0
+IF %SQLRC% NEQ 0 ECHO Process PSMODULEPATH var failed
+IF %SQLRC% NEQ 0 GOTO :ERROR
 
 :R2
 ECHO %TIME:~0,8% *********** %SQLVERSION% Install processing
@@ -215,6 +222,9 @@ SET SQLRC=4
 GOTO :EXIT
 
 :R7
+REM End point for most processing
+:R8
+REM End Point for /ReportOnly:Yes
 :END
 
 %SQLFBDEBUG% %TIME:~0,8% Report FineBuild Configuration
@@ -235,6 +245,6 @@ ECHO ************************************************************
 
 GOTO :EXIT
 
-:R8
+:R9
 :EXIT
 EXIT /B %SQLRC%
