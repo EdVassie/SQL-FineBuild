@@ -1,7 +1,7 @@
 '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 '
 '  FBManageJob.vbs  
-'  Copyright FineBuild Team © 2017 - 2019.  Distributed under Ms-Pl License
+'  Copyright FineBuild Team © 2017 - 2020.  Distributed under Ms-Pl License
 '
 '  Purpose:      Manage Creation of SQL Agent and Windows Scheduler Jobs
 '
@@ -21,9 +21,9 @@ Dim FBManageJob: Set FBManageJob = New FBManageJobClass
 
 Class FBManageJobClass
 Dim objFSO, objJobSQL, objJobSQLData, objShell
-Dim strCmd, strCmdSQL, strDBA_DB, strDirBackup, strEdition, strHKLMSQL, strInstance, strInstReg
+Dim strCmd, strCmdSQL, strDBA_DB, strDirBackup, strEdition, strHKLMSQL, strInstance, strInstReg, strInstSQL
 Dim strJobCategory, strJobCmd, strJobSaAccount, strJobId, strOSVersion, strPath, strPathMaint, strReport
-Dim strServInst, strSetupSQLAgent, strSqlAccount, strSqlPassword, strSQLOperator
+Dim strSchedLevel, strServInst, strSetupSQLAgent, strSqlAccount, strSqlPassword, strSQLOperator
 
 Private Sub Class_Initialize
   Call DebugLog("FBManageJob Class_Initialize:")
@@ -37,6 +37,7 @@ Private Sub Class_Initialize
   strDBA_DB         = GetBuildfileValue("DBA_DB")
   strEdition        = GetBuildfileValue("AuditEdition")
   strInstance       = GetBuildfileValue("Instance")
+  strInstSQL        = GetBuildfileValue("InstSQL")
   strJobCategory    = GetBuildfileValue("JobCategory")
   strOSVersion      = GetBuildfileValue("OSVersion")
   strSetupSQLAgent  = GetBuildfileValue("SetupSQLAgent")
@@ -60,6 +61,15 @@ Private Sub Class_Initialize
   If strSetupSQLAgent <> "YES" Then
     Call SetupFolder(strPathMaint)
   End If
+
+  Select Case True
+    Case strOSVersion >= "6"
+      strSchedLevel = "2"
+    Case (Instr(Ucase(strOSName), " XP") > 0) And (Instr(strOSType, "STARTER") > 0)
+      strSchedLevel = "0"
+    Case Else
+      strSchedLevel = "1"
+  End Select
 
   objJobSQL.Provider = "SQLOLEDB"
   objJobSQL.ConnectionString = "Driver={SQL Server};Server=" & GetBuildfileValue("ServInst") & ";Database=master;Trusted_Connection=Yes;"
@@ -270,12 +280,25 @@ End Function
 
 
 Sub SetupWindowsJob(strJobName, strJobCategory, strReportOpt, strJobType, strStepCmd, strFreq, strTime)
-  Call DebugLog("Setup Windows Job: " & strJobName)
+  Call DebugLog("SetupWindowsJob: " & strJobName)
+
+  Select Case True
+    Case strSchedLevel = "0"
+      ' Nothing
+    Case Else
+      Call BuildWindowsJob(strJobName, strJobCategory, strReportOpt, strJobType, strStepCmd, strFreq, strTime)
+  End Select
+
+End Sub
+
+
+Sub BuildWindowsJob(strJobName, strJobCategory, strReportOpt, strJobType, strStepCmd, strFreq, strTime)
+  Call DebugLog("BuildWindowsJob: " & strJobName)
   Dim objFile
   Dim strPathJob
 
   Call DebugLog("Delete existing job")
-  strJobCmd         = "SCHTASKS /Delete /tn """ & GetWinJobName(strJobName) & """ /F"
+  strJobCmd         = "SCHTASKS /Delete /tn """ & GetWinJobFolder() & GetWinJobName(strJobName) & """ /F"
   Call Util_RunExec(strJobCmd, "", strResponseYes, -1)
   strPathJob        = strPathMaint & "\" & GetWinJobName(strJobname) & ".bat"
   If objFSO.FileExists(strPathJob) Then
@@ -296,12 +319,24 @@ Sub SetupWindowsJob(strJobName, strJobCategory, strReportOpt, strJobType, strSte
   objFile.WriteLine "SET RUNTIME=%RUNTIME:~0,6%"
   objFile.WriteLine strJobCmd
   objFile.Close
-  strJobCmd         = "SCHTASKS /Create /tn """ & GetWinJobName(strJobName) & """ /tr """ & GetWinJobPath(strPathJob) & """ /sc """ & GetWinFreqType(strFreq) & """ " & GetWinFreq(strFreq) & " /st """ & GetWinStartTime(strTime) & """ /sd ""01/01/2000"" " & GetWinAccount(strSqlAccount) & " " & GetWinPassword(strSqlPassword)
+  strJobCmd         = "SCHTASKS /Create /tn """ & GetWinJobFolder() & GetWinJobName(strJobName) & """ /tr """ & GetWinJobPath(strPathJob) & """ /sc """ & GetWinFreqType(strFreq) & """ " & GetWinFreq(strFreq) & " /st """ & GetWinStartTime(strTime) & """ /sd ""01/01/2000"" " & GetWinAccount(strSqlAccount) & " " & GetWinPassword(strSqlPassword)
   Call Util_RunExec(strJobCmd, "", strResponseYes, 0)
 
   Set objFile       = Nothing
 
 End Sub
+
+
+Private Function GetWinJobFolder()
+
+  Select Case True
+    Case strSchedLevel <= "1"
+      GetWinJobFolder = ""
+    Case Else
+      GetWinJobFolder = strInstSQL & "\"
+  End Select
+
+End Function
 
 
 Private Function GetWinJobName(strJobName)
@@ -458,7 +493,7 @@ End Sub
 
 Sub RunWindowsJob(strJobName)
 
-  strJobCmd         = "SCHTASKS /Run /tn """ & GetWinJobName(strJobName) & """ "
+  strJobCmd         = "SCHTASKS /Run /tn """ & GetWinJobFolder() & GetWinJobName(strJobName) & """ "
   Call Util_RunExec(strJobCmd, "", strResponseYes, 0)
 
 End Sub

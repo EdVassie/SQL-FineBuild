@@ -562,4 +562,299 @@ EXEC msdb.dbo.sp_add_alert @name=N'Event - AG State Change',
 		@category_name=N'[Uncategorized]', 
 		@job_name=N'DBA: AG State Change';
 
+GO
 
+-- Create table for System Data Copy Job Exceptions
+
+IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[FB_AGSystemDataJobExceptions]') AND type in (N'U'))
+  DROP TABLE [dbo].[FB_AGSystemDataJobExceptions];
+
+CREATE TABLE [dbo].[FB_AGSystemDataJobExceptions]
+([Id]          INTEGER IDENTITY(1,1)
+,[AGName]      NVARCHAR(120) NOT NULL
+,[JobName]     NVARCHAR(120) NOT NULL
+,CONSTRAINT [PK_AGSystemDataJobExceptions] PRIMARY KEY CLUSTERED ([Id] ASC));
+
+IF EXISTS (SELECT 1 FROM sys.procedures WHERE name = N'FB_AGSystemData')
+  DROP PROCEDURE dbo.FB_AGSystemData;
+GO
+
+CREATE PROC [dbo].[FB_AGSystemData]
+ @AGName            NVARCHAR(120)            -- Name of AG for Failover
+,@Execute           CHAR(1)            = 'Y' -- Execute commands
+,@TargetServer      NVARCHAR(120)      = ''  -- Internal Use Only
+,@RemoteCall        VARCHAR(1)         = 'N' -- Internal Use Only
+,@Operation         CHAR(1)            = ''  -- Internal Use Only
+AS
+-- FB_AGSystemData
+--
+-- This routine copies System Data (Logins, jobs, etc) from the Primary to all Secondary servers
+--
+-- Syntax: EXEC FB_AGSystemData @AGName='AGName'
+--
+-- Do not use any of the parameters marked 'Internal Use Only', they are used within the Main Control Process
+-- This procedure requires that DbaTools has been installed from https://dbatools.io/
+--
+-- This Proc can be run on either the Primary or a Secondary server in the AG
+-- The Main Control Process works out which nodes are Primary and Secondary, and performs the relevant commands on them
+--
+-- Date        Name  Comment
+-- 30/05/2019  EMV   Initial code
+-- 25/06/2019  EMV   Added @TargetServer and @Execute logic
+-- 12/11/2019  EMV   Rewritten to eliminate hard code of Primary and Secondary server names
+--
+BEGIN;
+  SET NOCOUNT ON;
+
+  DECLARE
+   @JobName         NVARCHAR(128)
+  ,@ScheduleId      VARCHAR(8)
+  ,@SQLText         NVARCHAR(2000) = '';
+
+  DECLARE @Parameters TABLE
+  (AGName           NVARCHAR(128)
+  ,ExecProcess      CHAR(1)
+  ,PrimaryServer    NVARCHAR(128)
+  ,TargetServer     NVARCHAR(128)
+  ,CRLF             CHAR(2)
+  ,RemoteCall       CHAR(1)
+  ,Operation        CHAR(1));
+
+  INSERT INTO @Parameters (AGName,ExecProcess,PrimaryServer,TargetServer,CRLF,RemoteCall,Operation)
+  VALUES (
+   @AGName
+  ,@Execute
+  ,@@ServerName
+  ,@TargetServer
+  ,Char(13) + Char(10)
+  ,@RemoteCall
+  ,@Operation);
+  UPDATE @Parameters SET
+   AGName           = REPLACE(REPLACE(AGName, '[',''),']','')
+  FROM @Parameters p;
+  
+  IF (SELECT RemoteCall FROM @Parameters) <> 'Y' -- Main Control Process
+  BEGIN;
+
+    DROP TABLE IF EXISTS #AGServers;
+    SELECT *
+    INTO #AGServers
+    FROM dbo.FB_GetAGServers((SELECT AGName FROM @Parameters), '');
+    UPDATE @Parameters SET 
+     PrimaryServer  = ServerName 
+    FROM #AGServers WHERE ServerRole = 'P';
+    IF (SELECT ExecProcess FROM @Parameters) <> 'Y' 
+      SELECT * FROM #AGServers;
+ 
+    SELECT
+     @SQLText       = 'Copy Critical Data in System Databases for : ' + p.AGName
+    FROM @Parameters p;
+    SELECT
+     @SQLText       = @SQLText + p.CRLF + 'Current Primary Server: '   + a.ServerName
+    FROM @Parameters p
+    JOIN #AGServers a ON a.AGName = p.AGName
+    WHERE a.ServerRole = 'P';
+    SELECT
+     @SQLText       = @SQLText + p.CRLF + 'Current Secondary Server: ' + a.ServerName  
+    FROM @Parameters p
+    JOIN #AGServers a ON a.AGName = p.AGName
+    WHERE a.TargetServer = 'Y';
+    SELECT
+     @SQLText       = @SQLText + p.CRLF + REPLICATE('*', 40)
+    FROM @Parameters p;
+    PRINT @SQLText;
+
+    SET @SQLText    = '';
+    SELECT          -- Copy Critical Data
+     @SQLText       = @SQLText + p.CRLF + 'EXECUTE [' + p.PrimaryServer + '].master.dbo.FB_AGSystemData @AGName=''' + p.AGName + ''', @TargetServer=''' + a.ServerName + ''', @RemoteCall=''Y'', @Operation = ''C'' '
+    FROM @Parameters p
+    JOIN #AGServers a ON a.AGName = p.AGName
+    WHERE a.ServerRole = 'S';
+    PRINT @SQLText;
+    IF ((SELECT ExecProcess FROM @Parameters) = 'Y') AND (@SQLText <> '') EXECUTE sp_executeSQL @SQLText;
+
+    SET @SQLText    = '';
+    SELECT          -- Update Schedule data
+     @SQLText       = @SQLText + p.CRLF + 'EXECUTE [' + a.ServerName + '].master.dbo.FB_AGSystemData @AGName=''' + p.AGName + ''', @TargetServer=''' + a.ServerName + ''', @RemoteCall=''Y'', @Operation = ''S'' '
+    FROM @Parameters p
+    JOIN #AGServers a ON a.AGName = p.AGName
+    WHERE a.ServerRole = 'S';
+    PRINT @SQLText;
+    IF ((SELECT ExecProcess FROM @Parameters) = 'Y') AND (@SQLText <> '') EXECUTE sp_executeSQL @SQLText;
+
+    SET @SQLText    = '';
+    SELECT          -- Update Job data
+     @SQLText       = @SQLText + p.CRLF + 'EXECUTE [' + p.PrimaryServer + '].master.dbo.FB_AGSystemData @AGName=''' + p.AGName + ''', @TargetServer=''' + a.ServerName + ''', @RemoteCall=''Y'', @Operation = ''J'' '
+    FROM @Parameters p
+    JOIN #AGServers a ON a.AGName = p.AGName
+    WHERE a.ServerRole = 'S';
+    PRINT @SQLText;
+    IF ((SELECT ExecProcess FROM @Parameters) = 'Y') AND (@SQLText <> '') EXECUTE sp_executeSQL @SQLText;
+
+    SET @SQLText    = '';
+    SELECT          -- Enable Schedule Exceptions
+     @SQLText       = @SQLText + p.CRLF + 'EXECUTE [' + a.ServerName + '].master.dbo.FB_AGSystemData @AGName=''' + p.AGName + ''', @TargetServer=''' + a.ServerName + ''', @RemoteCall=''Y'', @Operation = ''E'' '
+    FROM @Parameters p
+    JOIN #AGServers a ON a.AGName = p.AGName
+    WHERE a.ServerRole = 'S';
+    PRINT @SQLText;
+    IF ((SELECT ExecProcess FROM @Parameters) = 'Y') AND (@SQLText <> '') EXECUTE sp_executeSQL @SQLText;
+
+    SELECT
+     @SQLText       = REPLICATE('*', 40) +
+                      p.CRLF + 'Critical Data copy for ' + p.AGName + ' complete'
+        FROM @Parameters p;
+    PRINT @SQLText;
+
+  END;
+
+  -- Start of Utility Functions called from the Main Control Process
+
+  IF (SELECT Operation FROM @Parameters) IN ('C') -- Copy Critical Data
+  BEGIN; 
+   
+    -- Credentials    also need to be copied but cannot be done using this method because elevated privileges are required on the target server to save passwords
+    -- Linked Servers also need to be copied but cannot be done using this method because elevated privileges are required on the target server to save passwords
+
+    SELECT @SQLText = 'xp_cmdshell ''MODE CON COLS=120 && POWERSHELL Copy-DbaAgentJobCategory -Source "' +  p.PrimaryServer + '" -Destination "' + p.TargetServer + '" -Force'''
+    FROM @Parameters p;
+    PRINT @SQLText;
+    IF (SELECT ExecProcess FROM @Parameters) = 'Y'  EXECUTE sp_executeSQL @SQLText;
+
+    SELECT @SQLText = 'xp_cmdshell ''MODE CON COLS=120 && POWERSHELL Copy-DbaLogin            -Source "' + p.PrimaryServer + '" -Destination "' + p.TargetServer + '" -Force'''
+    FROM @Parameters p;
+    PRINT @SQLText;
+    IF (SELECT ExecProcess FROM @Parameters) = 'Y'  EXECUTE sp_executeSQL @SQLText;
+
+    SELECT @SQLText = 'xp_cmdshell ''MODE CON COLS=120 && POWERSHELL Copy-DbaAgentOperator    -Source "' + p.PrimaryServer + '" -Destination "' + p.TargetServer + '" -Force'''
+    FROM @Parameters p;
+    PRINT @SQLText;
+    IF (SELECT ExecProcess FROM @Parameters) = 'Y'  EXECUTE sp_executeSQL @SQLText;
+
+    SELECT @SQLText = 'xp_cmdshell ''MODE CON COLS=120 && POWERSHELL Copy-DbaAgentAlert       -Source "' + p.PrimaryServer + '" -Destination "' + p.TargetServer + '" -Force'''
+    FROM @Parameters p;
+    PRINT @SQLText;
+    IF (SELECT ExecProcess FROM @Parameters) = 'Y'  EXECUTE sp_executeSQL @SQLText;
+
+    SELECT @SQLText = 'xp_cmdshell ''MODE CON COLS=120 && POWERSHELL Copy-DbaAgentProxy       -Source "' + p.PrimaryServer + '" -Destination "' + p.TargetServer + '" -Force'''
+    FROM @Parameters p;
+    PRINT @SQLText;
+    IF (SELECT ExecProcess FROM @Parameters) = 'Y'  EXECUTE sp_executeSQL @SQLText;
+
+    SELECT @SQLText = 'xp_cmdshell ''MODE CON COLS=120 && POWERSHELL Copy-DbaAgentSchedule    -Source "' + p.PrimaryServer + '" -Destination "' + p.TargetServer + '" -Force'''
+    FROM @Parameters p;
+    PRINT @SQLText;
+    IF (SELECT ExecProcess FROM @Parameters) = 'Y'  EXECUTE sp_executeSQL @SQLText;
+
+    SELECT @SQLText = 'xp_cmdshell ''MODE CON COLS=120 && POWERSHELL Copy-DbaDbMail           -Source "' + p.PrimaryServer + '" -Destination "' + p.TargetServer + '" -Force'''
+    FROM @Parameters p;
+    PRINT @SQLText;
+    IF (SELECT ExecProcess FROM @Parameters) = 'Y'  EXECUTE sp_executeSQL @SQLText;
+
+    SELECT @SQLText = 'xp_cmdshell ''MODE CON COLS=120 && POWERSHELL Copy-DbaSpConfigure      -Source "' + p.PrimaryServer + '" -Destination "' + p.TargetServer + '"'''
+    FROM @Parameters p;
+    PRINT @SQLText;
+    IF (SELECT ExecProcess FROM @Parameters) = 'Y'  EXECUTE sp_executeSQL @SQLText;
+
+    SELECT @SQLText = 'xp_cmdshell ''MODE CON COLS=120 && POWERSHELL Copy-DbaSysDbUserObject  -Source "' + p.PrimaryServer + '" -Destination "' + p.TargetServer + '" -Force'''
+    FROM @Parameters p;
+    PRINT @SQLText;
+    IF (SELECT ExecProcess FROM @Parameters) = 'Y'  EXECUTE sp_executeSQL @SQLText;
+
+    SELECT @SQLText = 'xp_cmdshell ''MODE CON COLS=120 && POWERSHELL Copy-DbaAgentJob         -Source "' + p.PrimaryServer + '" -Destination "' + p.TargetServer + '" -Force -DisableOnDestination'''
+    FROM @Parameters p;
+    PRINT @SQLText;
+    IF (SELECT ExecProcess FROM @Parameters) = 'Y'  EXECUTE sp_executeSQL @SQLText;
+
+    SELECT @SQLText = 'Copy of Critical Data to server ' + p.TargetServer
+    FROM @Parameters p;
+    PRINT @SQLText;
+    PRINT '';
+  END;
+
+  IF (SELECT Operation FROM @Parameters) = 'S' -- Update Schedule data on Target System
+  BEGIN; 
+    
+    DECLARE Job_Schedules CURSOR FAST_FORWARD FOR
+    SELECT
+     CAST(s.schedule_id AS varchar(8))
+    FROM msdb.dbo.sysschedules s
+    ORDER BY s.schedule_id;
+
+    OPEN Job_Schedules;
+    FETCH NEXT FROM Job_Schedules INTO @ScheduleId;
+    WHILE @@FETCH_STATUS = 0  
+    BEGIN;
+      SELECT 
+       @SQLText     = 'EXECUTE msdb.dbo.sp_update_schedule @schedule_id=''' + @Scheduleid + ''',@enabled=0'
+      FROM @Parameters p;
+      PRINT @SQLText;
+      IF (SELECT ExecProcess FROM @Parameters) = 'Y'  EXECUTE sp_executeSQL @SQLText;
+      FETCH NEXT FROM Job_Schedules INTO @ScheduleId;
+    END;
+    CLOSE Job_Schedules;
+    DEALLOCATE Job_Schedules;
+
+    SELECT @SQLText = 'Update of Schedule Data on server ' + p.TargetServer
+    FROM @Parameters p;
+    PRINT @SQLText;
+    PRINT '';
+
+  END;
+
+  IF (SELECT Operation FROM @Parameters) = 'J' -- Update Job data on Target System
+  BEGIN; 
+
+    DECLARE Job_Names CURSOR FAST_FORWARD FOR
+    SELECT
+     j.name
+    FROM msdb.dbo.sysjobs j
+    WHERE enabled = 1
+    ORDER BY j.name;
+
+    OPEN Job_Names;
+    FETCH NEXT FROM Job_Names INTO @JobName;
+    WHILE @@FETCH_STATUS = 0  
+    BEGIN;
+      SELECT 
+       @SQLText     = 'EXECUTE [' + p.TargetServer + '].msdb.dbo.sp_update_job @job_name=''' + @JobName + ''',@enabled=1;'
+      FROM @Parameters p;
+      PRINT @SQLText;
+      IF (SELECT ExecProcess FROM @Parameters) = 'Y'  EXECUTE sp_executeSQL @SQLText;
+      FETCH NEXT FROM Job_Names INTO @JobName;
+    END;
+    CLOSE Job_Names;
+    DEALLOCATE Job_Names;
+
+    SELECT @SQLText = 'Update of Job Data on server ' + p.TargetServer
+    FROM @Parameters p;
+    PRINT @SQLText;
+    PRINT '';
+
+  END;
+
+  IF (SELECT Operation FROM @Parameters) IN ('E') -- Enable Schedule Exceptions
+  BEGIN; 
+
+    SELECT @SQLText = 'Enable Schedule Exceptions on server ' + p.TargetServer
+    FROM @Parameters p;
+    PRINT @SQLText;
+    PRINT '';
+
+    SET @SQLText    = '';
+    SELECT
+     @SQLText       = p.CRLF + @SQLText + 'EXECUTE msdb.dbo.sp_update_schedule @schedule_id=' + Cast(s.schedule_id AS Varchar(8)) + ',@enabled=1; /* ' + j.name + ' */'
+    FROM msdb.dbo.sysschedules s
+    JOIN msdb.dbo.sysjobschedules js ON js.schedule_id = s.schedule_id
+    JOIN msdb.dbo.sysjobs j ON j.job_id = js.job_id
+    JOIN dbo.FB_AGSystemDataJobExceptions e ON e.AGName = p.AGName AND e.JobName = j.name
+    CROSS JOIN @Parameters p
+    ORDER BY j.name,s.schedule_id;
+    PRINT @SQLText;
+    IF ((SELECT ExecProcess FROM @Parameters) = 'Y') AND (@SQLText <> '') EXECUTE sp_executeSQL @SQLText;
+
+  END;
+
+END;
+
+GO

@@ -1,7 +1,7 @@
 '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 '
 '  FBManageLog.vbs  
-'  Copyright FineBuild Team © 2017 - 2019.  Distributed under Ms-Pl License
+'  Copyright FineBuild Team © 2017 - 2020.  Distributed under Ms-Pl License
 '
 '  Purpose:      Manage the FineBuild Log File 
 '
@@ -20,7 +20,6 @@ Dim FBManageLog: Set FBManageLog = New FBManageLogClass
 
 Dim objLogFile
 Dim strCmd, strDebug, strDebugDesc, strDebugMsg1, strDebugMsg2
-Dim strMsgError, strMsgWarning, strMsgIgnore, strMsgInfo
 Dim strProcessId, strProcessIdCode, strProcessIdDesc, strProcessIdLabel
 Dim strSetupLog, strStatusBypassed, strStatusComplete, strStatusFail, strStatusManual, strStatusPreConfig, strStatusProgress, strValue
 
@@ -184,6 +183,7 @@ Private Sub LogSetup()
       Set objLogFile     = objFSO.GetFile(Replace(strLogTxt, """", ""))
       strDebug           = GetBuildfileValue("Debug")
       strMsgError        = GetBuildfileValue("MsgError")
+      strMsgErrorConfig  = GetBuildfileValue("MsgErrorConfig")
       strMsgIgnore       = GetBuildfileValue("MsgIgnore")
       strMsgInfo         = GetBuildfileValue("MsgInfo")
       strMsgWarning      = GetBuildfileValue("MsgWarning")
@@ -256,7 +256,7 @@ Function HidePasswords(strText)
   Dim strLogText
 
   strLogText        = strText
-  If Instr("ListPassword:", strLogText) = 0 Then
+  If Instr(strLogText, "ListPassword:") = 0 Then
     strLogText      = HidePassword(strLogText, "DefaultPassword /d ")
     strLogText      = HidePassword(strLogText, "Password")
     strLogText      = HidePassword(strLogText, "PID")

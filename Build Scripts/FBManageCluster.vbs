@@ -1,7 +1,7 @@
 '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 '
 '  FBManageCluster.vbs  
-'  Copyright FineBuild Team © 2018 - 2019.  Distributed under Ms-Pl License
+'  Copyright FineBuild Team © 2018 - 2020.  Distributed under Ms-Pl License
 '
 '  Purpose:      Cluster Management Utilities 
 '
@@ -12,16 +12,15 @@
 '  Change History
 '  Version  Author        Date         Description
 '  1.0      Ed Vassie     29 Jan 2018  Initial version
-
 '
 '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 Option Explicit
 Dim FBManageCluster: Set FBManageCluster = New FBManageClusterClass
 
 Class FBManageClusterClass
-  Dim objShell, objRE, objWMIDNS, objWMIReg
+  Dim objShell, objRE, objWMI, objWMIDNS, objWMIReg
   Dim strClusIPV4Address, strClusIPV4Mask, strClusIPV4Network, strClusIPV6Address, strClusIPV6Mask, strClusIPV6Network, strClusStorage, strClusterName, strCmd, strCSVRoot
-  Dim strFailoverClusterDisks, strOSVersion, strPath, strPathNew, strPreferredOwner, strServer, strSQLVersion, strUserDNSServer
+  Dim strFailoverClusterDisks, strOSVersion, strPath, strPathNew, strPreferredOwner, strServer, strSQLVersion, strUserDNSDomain, strUserDNSServer
   Dim intIndex
 
 
@@ -29,6 +28,7 @@ Private Sub Class_Initialize
   Call DebugLog("FBManageCluster Class_Initialize:")
 
   Set objShell      = WScript.CreateObject ("Wscript.Shell")
+  Set objWMI        = GetObject("winmgmts:{impersonationLevel=impersonate,(Security)}!\\.\root\cimv2")
   Set objWMIReg     = GetObject("winmgmts:{impersonationLevel=impersonate}!\\.\root\default:StdRegProv")
 
   Set objRE         = New RegExp
@@ -48,12 +48,7 @@ Private Sub Class_Initialize
   strPreferredOwner = GetBuildfileValue("PreferredOwner")
   strServer         = GetBuildfileValue("AuditServer")
   strSQLVersion     = GetBuildfileValue("SQLVersion")
-  strUserDNSServer  = GetBuildfileValue("UserDNSServer")
-
-  If strUserDNSServer > "" Then
-    strDebugMsg1    = "DNS Server: " & strUserDNSServer
-    Set objWMIDNS   = GetObject("winmgmts:{impersonationLevel=impersonate}!\\" & strUserDNSServer & "\root\MicrosoftDNS")
-  End If
+  strUserDNSDomain  = ""
 
 End Sub
 
@@ -116,6 +111,15 @@ Sub AddChildNode(strProcess, strResourceName)
 End Sub
 
 
+Sub MoveGroup(strClusterGroup)
+  Call DebugLog("MoveGroup:" & strClusterGroup)
+
+  strCmd            = "CLUSTER """ & strClusterName & """ GROUP """ & strClusterGroup & """ /MOVETO:""" & strServer & """ "
+  Call Util_RunExec(strCmd, "", strResponseYes, 0)
+
+End Sub
+
+
 Sub RemoveOwner(strNetworkName)
   Call DebugLog("RemoveOwner: " & strNetworkName)
 
@@ -125,14 +129,14 @@ Sub RemoveOwner(strNetworkName)
 End Sub
 
 
-Sub SetOwnerNode(strCluster)
-  Call DebugLog("SetOwnerNode:" & strCluster)
+
+Sub SetOwnerNode(strClusterGroup)
+  Call DebugLog("SetOwnerNode:" & strClusterGroup)
 
   If strPreferredOwner = strServer Then
-    strCmd          = "CLUSTER """ & strClusterName & """ GROUP """ & strCluster & """ /SETOWNERS:""" & strServer & """ "
+    strCmd          = "CLUSTER """ & strClusterName & """ GROUP """ & strClusterGroup & """ /SETOWNERS:""" & strServer & """ "
     Call Util_RunExec(strCmd, "", strResponseYes, 0)
-    strCmd          = "CLUSTER """ & strClusterName & """ GROUP """ & strCluster & """ /MOVETO:""" & strServer & """ "
-    Call Util_RunExec(strCmd, "", strResponseYes, 0)
+    Call MoveGroup(strClusterGroup)
   End If
 
 End Sub
@@ -297,11 +301,14 @@ End Function
 
 Function GetAddress(strAddress, strFormat, strPreserve)
   Call DebugLog("GetAddress: " & strAddress)
-  Dim arrReadAll
   Dim colAddrs
-  Dim intLines, intAddrPos
-  Dim objAddr, objExec
-  Dim strAddrType, strQuery, strReadAll, strReadLine, strRetAddress
+  Dim objAddr
+  Dim strAddrType, strQuery, strRetAddress
+
+  If strUserDNSDomain = "" Then
+    strUserDNSDomain  = GetBuildfileValue("UserDNSDomain")
+    strUserDNSServer  = GetBuildfileValue("UserDNSServer")
+  End If
 
   objRE.Pattern     = "^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$"
   Select Case True
@@ -313,42 +320,34 @@ Function GetAddress(strAddress, strFormat, strPreserve)
       strAddrType   = "Server"
   End Select
 
-  strCmd            = "PING -a -n 1 " & strAddress
-  Set objExec       = objShell.Exec(strCmd)
-  strReadAll        = Replace(objExec.StdOut.ReadAll, vbLf, "")
-  arrReadAll        = Filter(Split(strReadAll, vbCr), " ")
-  intLines          = UBound(arrReadAll)
-  Call DebugLog("PING output:" & Cstr(intLines) & ">" & Join(arrReadAll, "< >") & "<")
+  Select Case True
+    Case strOSVersion < "6.0"
+      strRetAddress =  GetAddressPing(strAddress, strAddrType, strFormat)
+   Case Else
+      strRetAddress =  GetAddressWin32(strAddress, strAddrType, strFormat)
+  End Select
+  Call DebugLog("Address found: """ & strRetAddress & """")
+
+  Select Case True
+    Case strUserDNSServer = ""
+      ' Nothing
+    Case IsObject(objWMIDNS)
+      ' Nothing
+    Case Else
+      strDebugMsg1  = "DNS Server: " & strUserDNSServer
+      Set objWMIDNS = GetObject("winmgmts:{impersonationLevel=impersonate}!\\" & strUserDNSServer & "\root\MicrosoftDNS")
+  End Select
 
   strQuery          = ""
-  strReadLine       = arrReadAll(0)
-  intAddrPos        = Instr(strReadLine, "[")
-  strRetAddress     = ""
   Select Case True
-    Case intLines = 0
-      ' Nothing
-    Case intAddrPos > 0
-      Select Case True
-        Case strFormat = "IP"
-          strRetAddress = Mid(strReadLine,  intAddrPos + 1)
-          strRetAddress = Left(strRetAddress, Instr(strRetAddress, "]") - 1)
-        Case strAddrType = "Server"
-          strRetAddress = strAddress
-        Case Else
-          strRetAddress = Left(strReadLine, intAddrPos - 2)
-          strRetAddress = Mid(strRetAddress, InstrRev(strRetAddress, " ") + 1)
-          If Right(UCase(strRetAddress), Len(strUserDNSDomain)) = UCase(strUserDNSDomain) Then
-            strRetAddress = Left(strRetAddress, Len(strRetAddress) - (Len(strUserDNSDomain) + 1))
-          End If
-      End Select
     Case Not IsObject(objWMIDNS)
       ' Nothing
     Case strAddrType = "IPv4"
-      strQuery      = "Select * from MicrosoftDNS_AType    WHERE IPAddress   = '" & strAddress & "'"
+      strQuery      = "SELECT * FROM MicrosoftDNS_AType    WHERE IPAddress   = """ & strAddress & """"
     Case strAddrType = "IPv6"
-      strQuery      = "Select * from MicrosoftDNS_AAAAType WHERE IPV6Address = '" & strAddress & "'"
+      strQuery      = "SELECT * FROM MicrosoftDNS_AAAAType WHERE IPV6Address = """ & strAddress & """"
     Case Else
-      strQuery      = "Select * from MicrosoftDNS_AType    WHERE OwnerName LIKE'" & strAddress & "%'"
+      strQuery      = "SELECT * FROM MicrosoftDNS_AType    WHERE OwnerName   = """ & strAddress & "." & strUserDNSDomain & """"
   End Select
 
   If strQuery > "" Then
@@ -380,6 +379,63 @@ Function GetAddress(strAddress, strFormat, strPreserve)
   End Select 
 
   GetAddress     = UCase(strRetAddress)
+
+End Function
+
+
+Private Function GetAddressWin32(strAddress, strAddrType, strFormat)
+  Call DebugLog("GetAddressWin32")
+  Dim objAddr
+  Dim strRetAddress
+
+  strRetAddress     = ""
+  Set objAddr       = objWMI.Get("Win32_PingStatus.Address='" & strAddress & "',ResolveAddressNames=True,TypeOfService=4")
+  If objAddr.StatusCode = 0 Then
+    strRetAddress   =  GetAddressPing(strAddress, strAddrType, strFormat)
+  End If
+
+  GetAddressWin32   = strRetAddress
+
+End Function
+
+
+Private Function GetAddressPing(strAddress, strAddrType, strFormat)
+  Call DebugLog("GetAddressPing")
+  Dim arrReadAll
+  Dim colAddrs
+  Dim intLines, intAddrPos
+  Dim objExec
+  Dim strReadAll, strReadLine, strRetAddress
+
+  strCmd            = "PING -a -n 1 " & strAddress
+  Set objExec       = objShell.Exec(strCmd)
+  strReadAll        = Replace(objExec.StdOut.ReadAll, vbLf, "")
+  arrReadAll        = Filter(Split(strReadAll, vbCr), " ")
+  intLines          = UBound(arrReadAll)
+  Call DebugLog("PING output:" & Cstr(intLines) & ">" & Join(arrReadAll, "< >") & "<")
+
+  strRetAddress     = ""
+  strReadLine       = arrReadAll(0)
+  intAddrPos        = Instr(strReadLine, "[")
+  Select Case True
+    Case intLines = 0
+      ' Nothing
+    Case intAddrPos = 0
+       ' Nothing
+    Case strFormat = "IP"
+      strRetAddress = Mid(strReadLine,  intAddrPos + 1)
+      strRetAddress = Left(strRetAddress, Instr(strRetAddress, "]") - 1)
+    Case strAddrType = "Server"
+      strRetAddress = strAddress
+    Case Else
+      strRetAddress = Left(strReadLine, intAddrPos - 2)
+      strRetAddress = Mid(strRetAddress, InstrRev(strRetAddress, " ") + 1)
+      If Right(UCase(strRetAddress), Len(strUserDNSDomain)) = UCase(strUserDNSDomain) Then
+        strRetAddress = Left(strRetAddress, Len(strRetAddress) - (Len(strUserDNSDomain) + 1))
+      End If
+  End Select
+
+  GetAddressPing    = strRetAddress
 
 End Function
 
@@ -605,6 +661,19 @@ Private Function MoveClusterDrive(strClusterGroup, strVolParam)
 End Function
 
 
+Sub SetResourceOn(strResource)
+  Call DebugLog("SetResourceOn: " & strResource)
+
+  strCmd       = "CLUSTER """ & strClusterName & """ RESOURCE """ & strResource & """ /ON"
+  Call Util_RunExec(strCmd, "", strResponseYes, "5023")
+  If intErrSave = 5023 Then
+    WScript.Sleep strWaitLong
+    Call Util_RunExec(strCmd, "", strResponseYes, 0)
+  End If
+
+End Sub
+
+
 Sub SetVolumeDependency(strResourceName, strVolParam)
   Call DebugLog("SetVolumeDependency: " & strVolParam & " for " & strResourceName)
   Dim strVolName, strVolLabel
@@ -634,6 +703,10 @@ Sub AddChildNode(strProcess, strResourceName)
   Call FBManageCluster.AddChildNode(strProcess, strResourceName)
 End Sub
 
+Sub MoveGroup(strClusterGroup)
+  Call FBManageCluster.MoveGroup(strClusterGroup)
+End Sub
+
 Sub RemoveOwner(strNetworkName)
   Call FBManageCluster.RemoveOwner(strNetworkName)
 End Sub
@@ -649,6 +722,10 @@ End Function
 Function GetClusterIPAddresses(strClusterGroup, strClusterType, strAddressFormat)
   GetClusterIPAddresses = FBManageCluster.GetClusterIPAddresses(strClusterGroup, strClusterType, strAddressFormat)
 End Function
+
+Sub SetResourceOn(strResource)
+  Call FBManageCluster.SetResourceOn(strResource)
+End Sub
 
 Sub SetVolumeDependency(strResourceName, strVolParam)
   Call FBManageCluster.SetVolumeDependency(strResourceName, strVolParam)

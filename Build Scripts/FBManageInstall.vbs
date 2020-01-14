@@ -1,7 +1,7 @@
 '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 '
 '  FBManageInstall.vbs  
-'  Copyright FineBuild Team © 2017 - 2019.  Distributed under Ms-Pl License
+'  Copyright FineBuild Team © 2017 - 2020.  Distributed under Ms-Pl License
 '
 '  Purpose:      Install routines required for the Build 
 '
@@ -15,25 +15,41 @@
 '
 '  Parameters:
 '  Value         Default               Description
-'  ParmMain      strPathAddComp        Primary Path to Install Module 
-'  ParmXtra                            Additional Parameters for Install Module
-'  StatusOption  strStatusComplete     Completion Status
-'  InstallError  strStatusWarning      Error given on failed Install
+'  InstName                            Descriptive name for Install
+'  InstFile                            File to be installed (subject to Setup processing)
+'  InstParm                            String containing XML Parameters
+'
+'  XML Parameters:
+'  CleanBoot                           Force Reboot if pending
+'  InstallError  strMsgWarning         Error given on failed Install
+'  InstFile      Setup.exe             File to be Installed after Setup processing is complete
+'  InstOption    Install               Install Option
+'  InstTarget    strPathTemp           Target Path for Setup processing
 '  LogXtra                             Additional label for Log File
 '  MenuOption                          Control Menu setup
-'  CleanBoot                           Force Reboot if pending
+'  MenuError     strMsgWarning         Error to be given if Menu File not found
+'  MenuName      strInstName           Name of Menu Item
+'  MenuPath                            Destination path for Menu Item
+'  MenuSource    PathInst              Location of Menu File
+'  MSIAutoOS                           OS version above which to set up Compatibility Mode
+'  ParmExtract   /q /x:                Parameter for Setup Extract processing
+'  ParmLog       /log                  Parameter to identify log file location for Install Module 
+'  ParmMonitor                         Number of minutes to monitor for a hang before forcing a reboot
+'  ParmReboot    /norestart            Parameter to suppress Reboot processing for Install Module
+'  ParmRetry                           List of Return Codes that allow a Retry
+'  ParmSilent    /passive              Parameter to suppress confirmation messages for Install Module
+'  ParmXtra                            Additional Parameters for Install Module
+'  PathAlt                             Alternative Path to find Install Module
+'  PathLog       GetLogPath()          Path to Log File
+'  PathMain                            Main Path to find Install Module
+'  PreConKey                           Registry Rey to check in PreCon test
 '  PreConType    String                Data Type of Pre-Con Registry Key
 '  PreConValue                         Value to check in PreCon test
-'  PathAlt                             Alternative Path to find Install Module
-'  PreConKey                           Registry Rey to check in PreCon test
-'  InstOption    Install               Install Option
 '  SetupOption                         Pre-Install Option
-'  InstTarget    strPathTemp           Target Path for Setup processing
-'  InstFile      Setup.exe             File to be Installed
-'  ParmExtract   /q /x:                Parameter for Setup Extract processing
-'  PathLog       GetLogPath()          Path to Log File
-'  ParmRetry                           List of Return Codes that allow a Retry
-' TBC TBC TBC
+'  StatusOption  strStatusComplete     Completion Status
+'
+'  Other Key Variables:
+'  PathInst                            Path for Install Module after Discovery using PathMain and PathAlt
 '
 '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 Option Explicit
@@ -89,7 +105,7 @@ Sub RunInstall(strInstName, strInstFile, objInstParm)
         Case UCase(strInstallError) = strMsgIgnore
           ' Nothing
         Case Else
-          Call SetBuildMessage(strInstallError, "SETUP" & strInstName & ": " & Cstr(intErrSave) & " " & strErrSave & " returned by " & strPathInst)
+          Call SetBuildMessage(strInstallError, "Setup" & strInstName & ": " & Cstr(intErrSave) & " " & strErrSave & " returned by " & strPathInst)
           intErrSave = 0
       End Select
       Call DebugLog(" " & strProcessIdDesc & strStatusFail)
@@ -393,7 +409,7 @@ Private Function RunInstall_Process(strInstName, objInstParm)
   Call DebugLog("RunInstall_Process:")
   Dim strCmd, strCompatFlags, strHKCU, strInstFile, strInstOption, strInstPrompt, strInstType
   Dim strMode, strMSILayer, strMSIAutoOS, strOSType, strOSVersion
-  Dim strParmLog, strParmRetry, strPath, strPathCmd, strPathLog, strPathTemp
+  Dim strParmLog, strParmMonitor, strParmRetry, strPath, strPathCmd, strPathLog, strPathTemp
 
   RunInstall_Process = False
   strInstOption     = UCase(GetXMLParm(objInstParm, "InstOption", "Install"))
@@ -408,6 +424,7 @@ Private Function RunInstall_Process(strInstName, objInstParm)
   strOSVersion      = GetBuildfileValue("OSVersion")
   strPathLog        = GetXMLParm(objInstParm, "PathLog",   GetPathLog(strLogXtra))
   strPathTemp       = GetBuildfileValue("PathTemp")
+  strParmMonitor    = GetXMLParm(objInstParm, "ParmMonitor", "")
   strParmRetry      = GetXMLParm(objInstParm, "ParmRetry", "0")
 
   Select Case True
@@ -474,9 +491,11 @@ Private Function RunInstall_Process(strInstName, objInstParm)
       strPathCmd     = """" & strPathInst & """ " & GetXMLParm(objInstParm, "ParmReboot", "/norestart") 
       Select Case True
         Case UCase(strInstFile) = "DISM.EXE"
-          strPathCmd = strPathCmd & " "  & GetXMLParm(objInstParm, "ParmSilent", "")
+          strPathCmd    = strPathCmd & " "  & GetXMLParm(objInstParm, "ParmSilent", "")
+          strInstPrompt = "EOF"
         Case UCase(strInstFile) = "PKGMGR.EXE"
           strPathCmd = strPathCmd & " "  & GetXMLParm(objInstParm, "ParmSilent", "/QUIET")
+          strInstPrompt = "EOF"
         Case strMode = "ACTIVE" 
           ' Nothing
         Case Instr(strOSType, "CORE") > 0
@@ -523,6 +542,11 @@ Private Function RunInstall_Process(strInstName, objInstParm)
       strPathCmd    = strPathCmd & " "  & GetXMLParm(objInstParm, "ParmXtra", "")
       strPathCmd    = strPathCmd & " > " & strPathLog
   End Select
+
+  If strParmMonitor <> "" Then
+    strCmd          = "%COMSPEC% /D /C CSCRIPT.EXE """ & FormatFolder("PathFBScripts") & "FBMonitor.vbs"" /ProcessId:" & strProcessId & " /WaitTime:" & strParmMonitor
+    Call Util_RunCmdAsync(strCmd, 0)
+  End If
 
   strDebugMsg1      = "Log file: " & strPathLog
   Call Util_RunExec(strPathCmd, strInstPrompt, strResponseYes, -1)
@@ -603,7 +627,7 @@ Private Sub RunInstall_Menu(strInstName, objInstParm)
       Select Case True
         Case Not objFSO.FileExists(strPathOld)
           If UCase(strMenuError) <> strMsgIgnore Then
-            Call SetBuildMessage(strMenuError, "SETUP" & strInstName & ": " & strMenuName & " Menu source file not found " & strPathOld)
+            Call SetBuildMessage(strMenuError, "Setup" & strInstName & ": " & strMenuName & " Menu source file not found " & strPathOld)
           End If
           Exit Sub
         Case Not objFSO.FolderExists(strPathNew)

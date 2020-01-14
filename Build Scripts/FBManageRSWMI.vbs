@@ -156,7 +156,7 @@ End Sub
 
 Private Sub SetRSURL(strApplication, strDirectory)
   Call DebugLog("SetRSURL: " & strApplication)
-  Dim strClusterIPV4RS, strClusterIPV6RS, strStoreNamespace, strURL, strURLVar
+  Dim strClusterIPV4RS, strClusterIPV6RS, strStoreNamespace, strURLVar
 
   strStoreNamespace = strRSNamespace
 
@@ -178,34 +178,22 @@ Private Sub SetRSURL(strApplication, strDirectory)
       objRSInParam.Properties_.Item("lcid")                         = intRSLcid
       strURLVar      = "URLString"
   End Select
-  strURL             = strHTTP & "://" & GetBuildfileValue("AuditServer") & ":" & strTCPPortRS
-  strDebugMsg1       = "URL: " & strURL
-  objRSInParam.Properties_.Item(CStr(strURLVar)) = strURL
-  Call RunRSWMI(strFunction, "-2147220932") ' OK if URL already exists
-
-  Select Case True
-    Case strSetupSQLRSCluster <> "YES"
-      ' Nothing
-    Case Else
-      objRSInParam.Properties_.Item(CStr(strURLVar)) = strHTTP & "://" & GetBuildfileValue("ClusterGroupRS") & ":" & strTCPPortRS
-      Call RunRSWMI(strFunction, "-2147220932") ' OK if URL already exists
-  End Select
 
   Select Case True
     Case strRSAlias = ""
       ' Nothing
     Case Else
-      objRSInParam.Properties_.Item(CStr(strURLVar)) = strHTTP & "://" & strRSAlias & ":" & strTCPPortRS
-      Call RunRSWMI(strFunction, "-2147220932")
+      Call SetRSURLItem(strFunction, objRSInParam, strURLVar, strRSAlias)
   End Select
+
+  Call SetRSURLItem(strFunction, objRSInParam, strURLVar, GetBuildfileValue("AuditServer"))
 
   strClusterIPV4RS = GetBuildfileValue("ClusterIPV4RS")
   Select Case True
     Case strClusterIPV4RS = ""
       ' Nothing
     Case Else
-      objRSInParam.Properties_.Item(CStr(strURLVar)) = strHTTP & "://" & strClusterIPV4RS & ":" & strTCPPortRS
-      Call RunRSWMI(strFunction, "-2147220932")
+      Call SetRSURLItem(strFunction, objRSInParam, strURLVar, strClusterIPV4RS)
   End Select
 
   strClusterIPV6RS = GetBuildfileValue("ClusterIPV6RS")
@@ -215,11 +203,22 @@ Private Sub SetRSURL(strApplication, strDirectory)
     Case strSQLVersion < "SQL2012"
       ' Nothing
     Case Else
-      objRSInParam.Properties_.Item(CStr(strURLVar)) = strHTTP & "://" & strClusterIPV6RS & ":" & strTCPPortRS
-      Call RunRSWMI(strFunction, "-2147220932")
+      Call SetRSURLItem(strFunction, objRSInParam, strURLVar, strClusterIPV6RS)
   End Select
 
   strRSNamespace    = strStoreNamespace
+
+End Sub
+
+
+Private Sub SetRSURLItem(strFunction, objRSInParam, strURLVar, strHost)
+  Call DebugLog("SetRSURLItem: " & strHost)
+  Dim strURL
+
+  strURL             = strHTTP & "://" & UCase(strHost) & ":" & strTCPPortRS
+  strDebugMsg1       = "URL: " & strURL
+  objRSInParam.Properties_.Item(CStr(strURLVar)) = strURL
+  Call RunRSWMI(strFunction, "-2147220932") ' OK if URL already exists
 
 End Sub
 

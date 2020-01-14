@@ -17,18 +17,18 @@
 '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 Option Explicit
 Dim FBManageBuildFile: Set FBManageBuildFile = New FBManageBuildFileClass
-Dim objBuildFile
+Dim objBuildfile
+Dim strMsgError, strMsgErrorConfig, strMsgWarning, strMsgIgnore, strMsgInfo
 
 Class FBManageBuildFileClass
 Dim colBuildfile, colMessage, colStatefile
-Dim objAttribute, objMessages, objStatefile
+Dim objAttribute, objMessages, objShell, objStatefile
 Dim intBuildMsg, intFound
 Dim strBuildfile, strPathFBStart, strMessageOut, strMessagePrefix, strMessageRead, strProcessId, strStatefile, strValue
 
 
 Private Sub Class_Initialize
 ' Perform Initialisation processing
-  Dim objShell
 
   Set objBuildfile  = CreateObject("Microsoft.XMLDOM") 
   Set objStatefile  = CreateObject("Microsoft.XMLDOM") 
@@ -51,6 +51,10 @@ Function GetBuildfileValue(strParam)
 ' Get value from Buildfile
 
   Select Case True
+    Case strParam = ""
+      strValue      = ""
+    Case Not IsObject(colBuildfile)
+      strValue      = ""
     Case IsNull(colBuildfile.getAttribute(strParam))
       strValue      = ""
     Case Else
@@ -71,6 +75,8 @@ Sub SetBuildfileValue(strName, strValue)
   End If
 
   Select Case True
+    Case Not IsObject(colBuildfile)
+      ' Nothing
     Case IsNull(colBuildfile.getAttribute(strName))
       colBuildfile.setAttribute strName, strValue
     Case Else
@@ -80,7 +86,23 @@ Sub SetBuildfileValue(strName, strValue)
       objBuildFile.documentElement.appendChild colBuildfile
   End Select
 
-  objBuildFile.save strBuildFile
+  If IsObject(colBuildfile) Then
+    objBuildFile.save strBuildFile
+  End If
+
+End Sub
+
+
+Sub LinkBuildfile(strLogFile)
+'  "LinkBuildfile:"
+
+  If strLogFile = "" Then
+    strLogFile      = objShell.ExpandEnvironmentStrings("%SQLLOGTXT%")
+  End If
+
+  strBuildFile      = Mid(strLogFile, 2, Len(strLogFile) - 6) & ".xml"
+  objBuildfile.load(strBuildFile)
+  Set colBuildFile  = objBuildfile.documentElement.selectSingleNode("BuildFile")
 
 End Sub
 
@@ -102,7 +124,13 @@ Sub SetBuildMessage(strType, strMessage)
     Case Else
       strMessagePrefix = ""
   End Select
-  strMessageOut     = strMessagePrefix & HidePasswords(strMessage)
+  Select Case True
+    Case strType = strMsgErrorConfig
+      strMessageOut = strMsgError & ": " & HidePasswords(strMessage)
+      Call SetBuildfileValue("ErrorConfig", "YES")
+    Case Else
+      strMessageOut = strType     & ": " & strMessagePrefix & HidePasswords(strMessage)
+  End Select
 
   Set colMessage    = objBuildfile.documentElement.selectSingleNode("Message")
   Set objMessages   = colMessage.attributes
@@ -111,7 +139,7 @@ Sub SetBuildMessage(strType, strMessage)
   While intBuildMsg  < objMessages.length
     intBuildMsg     = intBuildMsg + 1
     strMessageRead  = colMessage.getAttribute("Msg" & CStr(intBuildMsg))
-    If strMessageRead = strType & ": " & strMessageOut Then
+    If strMessageRead = strMessageOut Then
       intFound      = 1
     End If
   WEnd
@@ -124,7 +152,7 @@ Sub SetBuildMessage(strType, strMessage)
 
   If intFound = 0 Then  
     Set objAttribute  = objBuildFile.createAttribute("Msg" & CStr(intBuildMsg))
-    objAttribute.Text = strType & ": " & strMessageOut
+    objAttribute.Text = strMessageOut
     colMessage.Attributes.setNamedItem objAttribute
     objBuildFile.documentElement.appendChild colMessage
     objBuildFile.save strBuildFile
@@ -134,11 +162,8 @@ Sub SetBuildMessage(strType, strMessage)
   Select Case True
     Case strType = strMsgError 
       Call FBLog(" ")
-      Call FBLog(" " & strType & ": " & strMessageOut)
-      err.Raise 8, "", strType & ": " & strMessageOut
-    Case strType = strMsgWarning 
-      Call FBLog(" ")
-      Call FBLog(" " & strType & ": " & strMessageOut)
+      Call FBLog(" " & strMessageOut)
+      err.Raise 8, "", strMessageOut
     Case Else
       Call FBLog(" " & strMessageOut)
   End Select
@@ -152,11 +177,13 @@ Function GetStatefileValue(strParam)
   If Not IsObject(colStatefile) Then
     strStatefile        = GetBuildfileValue("Statefile")
     objStatefile.async  = False
-    objStatefile.load(strStateFile)
+    objStatefile.load(strStatefile)
     Set colStatefile    = objStatefile.documentElement.selectSingleNode("FineBuildState")    
   End If
 
   Select Case True
+    Case strParam = ""
+      strValue      = ""
     Case IsNull(colStatefile.getAttribute(strParam))
       strValue      = ""
     Case Else
@@ -175,7 +202,7 @@ Sub SetStatefileValue(strName, strValue)
   If Not IsObject(colStatefile) Then
     strStatefile        = GetBuildfileValue("Statefile")
     objStatefile.async  = False
-    objStatefile.load(strStateFile)
+    objStatefile.load(strStatefile)
     Set colStatefile    = objStatefile.documentElement.selectSingleNode("FineBuildState")  
   End If
 
@@ -206,6 +233,10 @@ End Function
 
 Sub SetBuildfileValue(strName, strValue)
   Call FBManageBuildFile.SetBuildfileValue(strName, strValue)
+End Sub
+
+Sub LinkBuildfile(strLogFile)
+  Call FBManageBuildFile.LinkBuildfile(strLogFile)
 End Sub
 
 Sub SetBuildMessage(strType, strMessage)
