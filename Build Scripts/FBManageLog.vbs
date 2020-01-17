@@ -19,7 +19,7 @@ Option Explicit
 Dim FBManageLog: Set FBManageLog = New FBManageLogClass
 
 Dim objLogFile
-Dim strCmd, strDebug, strDebugDesc, strDebugMsg1, strDebugMsg2
+Dim strDebug, strDebugDesc, strDebugMsg1, strDebugMsg2
 Dim strProcessId, strProcessIdCode, strProcessIdDesc, strProcessIdLabel
 Dim strSetupLog, strStatusBypassed, strStatusComplete, strStatusFail, strStatusManual, strStatusPreConfig, strStatusProgress, strValue
 
@@ -70,7 +70,12 @@ Sub FBLog(strLogText)
     Wscript.Echo LogFormat(strLogText, "E")
   End If
 
-  Call LogWrite(strLogText)
+  Select Case True
+    Case Not IsObject(objLogFile)
+      ' Nothing
+    Case Else
+      Call LogWrite(strLogText)
+  End Select
 
 End Sub
 
@@ -97,7 +102,7 @@ End Function
 Sub LogClose()
   Call DebugLog("LogClose:")
   Dim intIdx
-  Dim strNumLogins
+  Dim strCmd, strNumLogins
 
   Call HideBuildPassword("AdminPassword")
   Call HideBuildPassword("AgtPassword")

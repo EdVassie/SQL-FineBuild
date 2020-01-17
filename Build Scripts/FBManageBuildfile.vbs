@@ -1,7 +1,7 @@
 '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 '
 '  FBManageBuildFile.vbs  
-'  Copyright FineBuild Team © 2017 - 2019.  Distributed under Ms-Pl License
+'  Copyright FineBuild Team © 2017 - 2020.  Distributed under Ms-Pl License
 '
 '  Purpose:      Manage the FineBuild Buildfile 
 '
@@ -22,7 +22,7 @@ Dim strMsgError, strMsgErrorConfig, strMsgWarning, strMsgIgnore, strMsgInfo
 
 Class FBManageBuildFileClass
 Dim colBuildfile, colMessage, colStatefile
-Dim objAttribute, objMessages, objShell, objStatefile
+Dim objAttribute, objFSO, objMessages, objShell, objStatefile
 Dim intBuildMsg, intFound
 Dim strBuildfile, strPathFBStart, strMessageOut, strMessagePrefix, strMessageRead, strProcessId, strStatefile, strValue
 
@@ -31,18 +31,17 @@ Private Sub Class_Initialize
 ' Perform Initialisation processing
 
   Set objBuildfile  = CreateObject("Microsoft.XMLDOM") 
+  Set objFSO        = CreateObject ("Scripting.FileSystemObject")
   Set objStatefile  = CreateObject("Microsoft.XMLDOM") 
   Set objShell      = CreateObject("Wscript.Shell")
+  objBuildfile.async  = False
 
   strBuildfile      = objShell.ExpandEnvironmentStrings("%SQLLOGTXT%")
   If strBuildfile = "%SQLLOGTXT%" Then
     Exit Sub
   End If
 
-  strBuildfile        = Mid(strBuildfile, 2, Len(strBuildfile) - 6) & ".xml"
-  objBuildfile.async  = False
-  objBuildfile.load(strBuildFile)
-  Set colBuildfile    = objBuildfile.documentElement.selectSingleNode("BuildFile")
+  Call LinkBuildfile(strBuildfile)
 
 End Sub
 
@@ -93,16 +92,19 @@ Sub SetBuildfileValue(strName, strValue)
 End Sub
 
 
-Sub LinkBuildfile(strLogFile)
+Sub LinkBuildfile(strLogfile)
 '  "LinkBuildfile:"
 
-  If strLogFile = "" Then
-    strLogFile      = objShell.ExpandEnvironmentStrings("%SQLLOGTXT%")
+  If strLogfile = "" Then
+    strLogfile      = objShell.ExpandEnvironmentStrings("%SQLLOGTXT%")
   End If
 
-  strBuildFile      = Mid(strLogFile, 2, Len(strLogFile) - 6) & ".xml"
-  objBuildfile.load(strBuildFile)
-  Set colBuildFile  = objBuildfile.documentElement.selectSingleNode("BuildFile")
+  strBuildfile       = Replace(strLogfile, """", "")
+  strBuildfile       = Left(strBuildfile, Len(strBuildfile) - 4) & ".xml"
+  If objFSO.FileExists(strBuildFile) Then
+    objBuildfile.load(strBuildFile)
+    Set colBuildfile = objBuildfile.documentElement.selectSingleNode("BuildFile")
+  End If
 
 End Sub
 

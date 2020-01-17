@@ -3,7 +3,7 @@
 '  FBUtils.vbs  
 '  Copyright FineBuild Team © 2017 - 2020.  Distributed under Ms-Pl License
 '
-'  Purpose:      Manage the FineBuild Log File 
+'  Purpose:      Miscellaneous Utilities 
 '
 '  Author:       Ed Vassie
 '
@@ -18,7 +18,7 @@
 Option Explicit
 Dim FBUtils: Set FBUtils = New FBUtilsClass
 Dim intErrSave
-Dim strHKCR, strHKLM, strHKLMSQL, strErrSave, strResponseYes, strResponseNo
+Dim strCmd, strHKCR, strHKLM, strHKLMSQL, strErrSave, strResponseYes, strResponseNo
 
 Class FBUtilsClass
 
@@ -47,22 +47,23 @@ Private Sub Class_Initialize
   strHKLM           = &H80000002
   strBuiltinDom     = ""
 
-  strClusterName    = GetBuildfileValue("ClusterName")
-  strCmdPS          = GetBuildfileValue("CmdPS")
-  strGroupDBA       = GetBuildfileValue("GroupDBA")
-  strGroupDBANonSA  = GetBuildfileValue("GroupDBANonSA")
-  strIsInstallDBA   = GetBuildfileValue("IsInstallDBA")
-  strOSVersion      = GetBuildfileValue("OSVersion")
-  strProgCacls      = GetBuildfileValue("ProgCacls")
-  strServer         = GetBuildfileValue("AuditServer")
-  strServInst       = GetBuildfileValue("ServInst")
-  strSIDDistComUsers  = GetBuildfileValue("SIDDistComUsers")
-  strResponseNo     = GetBuildfileValue("ResponseNo")
-  strResponseYes    = GetBuildfileValue("ResponseYes")
-  strUserAccount    = GetBuildfileValue("UserAccount")
-  strWaitShort      = GetBuildfileValue("WaitShort")
-
-  Call SetHKLMSQL()
+  If strProcessIdCode <> "FBCV" Then
+    strClusterName    = GetBuildfileValue("ClusterName")
+    strCmdPS          = GetBuildfileValue("CmdPS")
+    strGroupDBA       = GetBuildfileValue("GroupDBA")
+    strGroupDBANonSA  = GetBuildfileValue("GroupDBANonSA")
+    strIsInstallDBA   = GetBuildfileValue("IsInstallDBA")
+    strOSVersion      = GetBuildfileValue("OSVersion")
+    strProgCacls      = GetBuildfileValue("ProgCacls")
+    strServer         = GetBuildfileValue("AuditServer")
+    strServInst       = GetBuildfileValue("ServInst")
+    strSIDDistComUsers = GetBuildfileValue("SIDDistComUsers")
+    strResponseNo     = GetBuildfileValue("ResponseNo")
+    strResponseYes    = GetBuildfileValue("ResponseYes")
+    strUserAccount    = GetBuildfileValue("UserAccount")
+    strWaitShort      = GetBuildfileValue("WaitShort")
+    Call SetHKLMSQL()
+  End If
 
   objADOConn.Provider            = "ADsDSOObject"
   objADOConn.Open "ADs Provider"
@@ -725,6 +726,37 @@ Sub SetXMLParm(objParm, strParm, strValue)
 End Sub
 
 
+Sub SetXMLConfigValue(objConfig, strNode, strAttr, strValue)
+  Call DebugLog("SetXMLConfigValue: " & strNode & ", " & strValue)
+  Dim objNode, objAttr
+  Dim strPrefix
+
+  Select Case True
+    Case strNode <> ""
+      Set objNode   = objConfig.documentElement.selectSingleNode(""" & strNode & """)
+      Set objAttr   = objNode.selectSingleNode(strAttr)
+    Case Else
+      Set objAttr   = objConfig.documentElement.selectSingleNode("//" & strAttr)
+  End Select
+
+  Select Case True
+    Case strValue   = ""
+      ' Nothing
+    Case (objAttr Is Nothing) And (strNode <> "")
+      Set objAttr   = objConfig.createElement(strName)
+      objAttr.Text  = strValue
+      objNode.appendChild objAttr
+    Case objAttr Is Nothing
+      Set objAttr   = objConfig.createElement(strName)
+      objAttr.Text  = strValue
+      objConfig.appendChild objAttr
+    Case Else
+      objAttr.Text  = strValue
+  End Select
+
+End Sub
+
+
 Sub Util_RegWrite(strRegKey, strRegValue, strRegType)
   Call DebugLog("Util_RegWrite: " & strRegKey)
 
@@ -931,6 +963,10 @@ End Function
 
 Sub SetXMLParm(objParm, strParm, strValue)
   Call FBUtils.SetXMLParm(objParm, strParm, strValue)
+End Sub
+
+Sub SetXMLConfigValue(objConfig, strNode, strValue)
+  Call FBUtils.SetXMLConfigValue(objConfig, strNode, strValue)
 End Sub
 
 Sub SetParam(strParamName, strParam, strNewValue, strMessage, ByRef strList)
