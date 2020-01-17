@@ -1,7 +1,7 @@
 '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 '
 '  FBManageLog.vbs  
-'  Copyright FineBuild Team © 2017 - 2020.  Distributed under Ms-Pl License
+'  Copyright FineBuild Team © 2017 - 2018.  Distributed under Ms-Pl License
 '
 '  Purpose:      Manage the FineBuild Log File 
 '
@@ -19,9 +19,10 @@ Option Explicit
 Dim FBManageLog: Set FBManageLog = New FBManageLogClass
 
 Dim objLogFile
-Dim strDebug, strDebugDesc, strDebugMsg1, strDebugMsg2
+Dim strCmd, strDebug, strDebugDesc, strDebugMsg1, strDebugMsg2
+Dim strMsgError, strMsgWarning, strMsgInfo
 Dim strProcessId, strProcessIdCode, strProcessIdDesc, strProcessIdLabel
-Dim strSetupLog, strStatusBypassed, strStatusComplete, strStatusFail, strStatusManual, strStatusPreConfig, strStatusProgress, strValue
+Dim strSetupLog, strStatusBypassed, strStatusComplete, strStatusFail, strStatusManual, strStatusPreConfig, strStatusProgress
 
 Class FBManageLogClass
 Dim objFSO, objShell 
@@ -70,12 +71,7 @@ Sub FBLog(strLogText)
     Wscript.Echo LogFormat(strLogText, "E")
   End If
 
-  Select Case True
-    Case Not IsObject(objLogFile)
-      ' Nothing
-    Case Else
-      Call LogWrite(strLogText)
-  End Select
+  Call LogWrite(strLogText)
 
 End Sub
 
@@ -102,7 +98,7 @@ End Function
 Sub LogClose()
   Call DebugLog("LogClose:")
   Dim intIdx
-  Dim strCmd, strNumLogins
+  Dim strNumLogins
 
   Call HideBuildPassword("AdminPassword")
   Call HideBuildPassword("AgtPassword")
@@ -188,8 +184,6 @@ Private Sub LogSetup()
       Set objLogFile     = objFSO.GetFile(Replace(strLogTxt, """", ""))
       strDebug           = GetBuildfileValue("Debug")
       strMsgError        = GetBuildfileValue("MsgError")
-      strMsgErrorConfig  = GetBuildfileValue("MsgErrorConfig")
-      strMsgIgnore       = GetBuildfileValue("MsgIgnore")
       strMsgInfo         = GetBuildfileValue("MsgInfo")
       strMsgWarning      = GetBuildfileValue("MsgWarning")
       strProcessId       = GetBuildfileValue("ProcessId")
@@ -218,8 +212,8 @@ End Sub
 
 Private Sub HideBuildPassword(strName)
 
-  strValue          = GetBuildFileValue(strName)
-  If strValue <> "" Then 
+  strCmd            = GetBuildFileValue(strName)
+  If strCmd <> "" Then 
     Call SetBuildfileValue(strName, "********")
   End If 
 
@@ -261,13 +255,12 @@ Function HidePasswords(strText)
   Dim strLogText
 
   strLogText        = strText
-  If Instr(strLogText, "ListPassword:") = 0 Then
-    strLogText      = HidePassword(strLogText, "DefaultPassword /d ")
-    strLogText      = HidePassword(strLogText, "Password")
-    strLogText      = HidePassword(strLogText, "PID")
-    strLogText      = HidePassword(strLogText, "Pwd")
-    strLogText      = HidePassword(strLogText, " -p ")
-  End If
+  strLogText        = HidePassword(strLogText, "Password")
+  strLogText        = HidePassword(strLogText, "PID")
+  strLogText        = HidePassword(strLogText, "Pwd")
+  strLogText        = HidePassword(strLogText, " -p ")
+  strLogText        = HidePassword(strLogText, "StreamInsightPID")
+  strLogText        = HidePassword(strLogText, "DefaultPassword /d ")
   HidePasswords     = strLogText
 
 End Function
@@ -312,7 +305,7 @@ End Sub
 Sub ProcessEnd(strStatus)
 
   If strStatus <> "" Then
-    Call LogWrite(" " & strProcessIdDesc & strStatus)
+    Call LogWrite(" " & strProcessIdDesc & strStatusComplete)
   End If
 
   If (strStopAt = "AUTO") Or (strStopAt <> "" And strStopAt <= strProcessIdLabel) Then

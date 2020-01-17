@@ -1,9 +1,9 @@
 '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 '
 '  FBUtils.vbs  
-'  Copyright FineBuild Team © 2017 - 2020.  Distributed under Ms-Pl License
+'  Copyright FineBuild Team © 2017 - 2018.  Distributed under Ms-Pl License
 '
-'  Purpose:      Miscellaneous Utilities 
+'  Purpose:      Manage the FineBuild Log File 
 '
 '  Author:       Ed Vassie
 '
@@ -18,26 +18,22 @@
 Option Explicit
 Dim FBUtils: Set FBUtils = New FBUtilsClass
 Dim intErrSave
-Dim strCmd, strHKCR, strHKLM, strHKLMSQL, strErrSave, strResponseYes, strResponseNo
+Dim strHKCR, strHKLM, strErrSave, strResponseYes, strResponseNo
 
 Class FBUtilsClass
 
-Dim objADOCmd, objADOConn, objAutoUpdate, objFile, objFSO, objShell, objWMI, objWMIReg
+Dim objAutoUpdate, objFSO, objShell, objWMIReg
 Dim colPrcEnvVars
-Dim intIdx, intBuiltinDomLen, intNTAuthLen, intServerLen
-Dim strBuiltinDom, strClusterName, strCmd, strCmdPS, strCmdSQL, strGroupDBA, strGroupDBANonSA, strIsInstallDBA, strNTAuth, strOSVersion
-Dim strPath, strPathCmdSQL, strPathTools, strProgCacls, strRegTools, strServer, strServInst, strSIDDistComUsers, strSQLVersion, strSQLVersionNum, strUserAccount, strWaitShort
+Dim strCmd, strCmdPS, strGroupDBA, strGroupDBANonSA, strIsInstallDBA, strPath, strServer, strSIDDistComUsers, strUserAccount
+Dim intIdx
 
 
 Private Sub Class_Initialize
   Call DebugLog("FBUtils Class_Initialize:")
 
-  Set objADOConn    = CreateObject("ADODB.Connection")
-  Set objADOCmd     = CreateObject("ADODB.Command")
   Set objAutoUpdate = CreateObject("Microsoft.Update.AutoUpdate")
   Set objFSO        = CreateObject("Scripting.FileSystemObject")
   Set objShell      = CreateObject("Wscript.Shell")
-  Set objWMI        = GetObject("winmgmts:{impersonationLevel=impersonate}!\\.\root\cimv2")
   Set objWMIReg     = GetObject("winmgmts:{impersonationLevel=impersonate}!\\.\root\default:StdRegProv")
   Set colPrcEnvVars = objShell.Environment("Process")
 
@@ -45,90 +41,51 @@ Private Sub Class_Initialize
   strErrSave        = ""
   strHKCR           = &H80000000
   strHKLM           = &H80000002
-  strBuiltinDom     = ""
-
-  If strProcessIdCode <> "FBCV" Then
-    strClusterName    = GetBuildfileValue("ClusterName")
-    strCmdPS          = GetBuildfileValue("CmdPS")
-    strGroupDBA       = GetBuildfileValue("GroupDBA")
-    strGroupDBANonSA  = GetBuildfileValue("GroupDBANonSA")
-    strIsInstallDBA   = GetBuildfileValue("IsInstallDBA")
-    strOSVersion      = GetBuildfileValue("OSVersion")
-    strProgCacls      = GetBuildfileValue("ProgCacls")
-    strServer         = GetBuildfileValue("AuditServer")
-    strServInst       = GetBuildfileValue("ServInst")
-    strSIDDistComUsers = GetBuildfileValue("SIDDistComUsers")
-    strResponseNo     = GetBuildfileValue("ResponseNo")
-    strResponseYes    = GetBuildfileValue("ResponseYes")
-    strUserAccount    = GetBuildfileValue("UserAccount")
-    strWaitShort      = GetBuildfileValue("WaitShort")
-    Call SetHKLMSQL()
-  End If
-
-  objADOConn.Provider            = "ADsDSOObject"
-  objADOConn.Open "ADs Provider"
-  Set objADOCmd.ActiveConnection = objADOConn
-
-End Sub
-
-
-Sub CopyFile(strSource, strTarget)
-  Call DebugLog("CopyFile: " & strSource & " to " & strTarget)
-
-  Set objFile       = objFSO.GetFile(strSource)
-  strPath           = strTarget & objFile.Name
-  If Not objFSO.FileExists(strPath) Then
-    objFile.Copy strPath, True
-  End If
+  strCmdPS          = GetBuildfileValue("CmdPS")
+  strGroupDBA       = GetBuildfileValue("GroupDBA")
+  strGroupDBANonSA  = GetBuildfileValue("GroupDBANonSA")
+  strIsInstallDBA   = GetBuildfileValue("IsInstallDBA")
+  strServer         = GetBuildfileValue("AuditServer")
+  strSIDDistComUsers  = GetBuildfileValue("SIDDistComUsers")
+  strResponseNo     = GetBuildfileValue("ResponseNo")
+  strResponseYes    = GetBuildfileValue("ResponseYes")
+  strUserAccount    = GetBuildfileValue("UserAccount")
 
 End Sub
 
 
 Function FormatAccount(strAccount)
   Call DebugLog("FormatAccount: " & strAccount)
-  Dim strFmtAccount
+  Dim intBuiltinDomLen, intNTAuthLen, intServerLen
+  Dim strBuiltinDom, strNTAuth
 
-  If strBuiltinDom = "" Then
-    strBuiltinDom   = GetBuildfileValue("BuiltinDom")
-    intBuiltinDomLen  = Len(strBuiltinDom) + 1
-    strNTAuth       = GetBuildfileValue("NTAuth")
-    intNTAuthLen    = Len(strNTAuth) + 1
-    intServerLen    = Len(strServer) + 1
-  End If
-
+  strBuiltinDom     = GetBuildfileValue("BuiltinDom")
+  intBuiltinDomLen  = Len(strBuiltinDom) + 1
+  strNTAuth         = GetBuildfileValue("NTAuth")
+  intNTAuthLen      = Len(strNTAuth) + 1
+  intServerLen      = Len(strServer) + 1
   Select Case True
     Case Left(strAccount, intNTAuthLen) = strNTAuth & "\"
-      strFmtAccount = Mid(strAccount, intNTAuthLen + 1)
+      FormatAccount = Mid(strAccount, intNTAuthLen + 1)
     Case Left(strAccount, intServerLen) = strServer & "\"
-      strFmtAccount = Mid(strAccount, intServerLen + 1)
+      FormatAccount = Mid(strAccount, intServerLen + 1)
     Case Left(strAccount, intBuiltinDomLen) = strBuiltinDom & "\"
-      strFmtAccount = Mid(strAccount, intBuiltinDomLen + 1)
+      FormatAccount = Mid(strAccount, intBuiltinDomLen + 1)
     Case Else
-      strFmtAccount = strAccount
+      FormatAccount = strAccount
   End Select
-
-  Select Case True
-    Case strFmtAccount = strServer
-      strFmtAccount = strFmtAccount & "$"
-    Case strFmtAccount = strClusterName
-      strFmtAccount = strFmtAccount & "$"
-  End Select
-
-  FormatAccount     = strFmtAccount
 
 End Function
 
 
 Function FormatFolder(strFolder)
-  Call DebugLog("FormatFolder: " & strFolder)
+  Call DebugLog("FormatFolder: " &strFolder)
   Dim strFBLocal, strFBRemote, strFolderPath
 
   strFBLocal        = GetBuildfileValue("FBPathLocal")
   strFBRemote       = GetBuildfileValue("FBPathRemote")
 
   Select Case True
-    Case strFolder = ""
-      strFolderPath = ""
     Case Mid(strFolder, 2, 1) = ":"
       strFolderPath = strFolder
     Case Left(strFolder, 2) = "\\"
@@ -144,22 +101,13 @@ Function FormatFolder(strFolder)
       strFolderPath = strFBLocal & Mid(strFolderPath, Len(strFBRemote) + 1)
   End Select
 
-  Select Case True
-    Case strFolderPath = ""
-      ' Nothing
-    Case Right(strFolderPath, 1) = "\"
-      ' Nothing
-    Case Else
-      strFolderPath = strFolderPath & "\"
-  End Select
-
   FormatFolder      = strFolderPath  
  
 End Function
 
 
 Function FormatFolderURI(strFolder)
-  Call DebugLog("FormatFolderURI: " & strFolder)
+  Call DebugLog("FormatFolderURI: " &strFolder)
   Dim strFolderPath
 
   strFolderPath     = FormatFolder(strFolder)
@@ -186,144 +134,6 @@ Function FormatServer(strServer, strProtocol)
 End Function
 
 
-Function GetAccountAttr(strUserAccount, strUserDNSDomain, strUserAttr)
-  Call DebugLog("GetAccountAttr: " & strUserAccount & ", " & strUserAttr)
-  Dim objACE, objAttr, objDACL, objField, objRecordSet
-  Dim strAccount,strAttrObject, strAttrItem, strAttrList, strAttrValue
-  Dim intIdx
- 
-  strAttrValue      = ""
-  strAccount        = FormatAccount(strUserAccount)
-  intIdx            = Instr(strAccount, "\")
-  Select Case True
-    Case intIdx > 0
-      strAccount    = Mid(strAccount, intIdx  + 1)
-    Case StrComp(strAccount, strServer, vbTextCompare) = 0
-      strAccount    = strAccount & "$"
-    Case StrComp(strAccount, strClusterName, vbTextCompare) = 0
-      strAccount    = strAccount & "$"
-   End Select
-
-  On Error Resume Next 
-  objADOCmd.CommandText          = "<LDAP://DC=" & Replace(strUserDNSDomain, ".", ",DC=") & ">;(&(sAMAccountName=" & strAccount & "));distinguishedName," & strUserAttr
-  Set objRecordSet  = objADOCmd.Execute
-
-  On Error Goto 0
-  Select Case True
-    Case Not IsObject(objRecordset)
-      ' Nothing
-    Case objRecordset Is Nothing
-      ' Nothing
-    Case IsNull(objRecordset)
-      ' Nothing
-    Case objRecordset.RecordCount = 0 
-      ' Nothing
-    Case IsNull(objRecordset.Fields(1).Value)
-      ' Nothing
-    Case strUserAttr = "msDS-GroupMSAMembership"
-      Set objField  = GetObject("LDAP://" & objRecordset.Fields(0).Value)
-      Set objAttr   = objField.Get("msDS-GroupMSAMembership")
-      Set objDACL   = objAttr.DiscretionaryAcl
-      strAttrValue  = "> "
-      For Each objACE In objDACL
-        strAttrValue = strAttrValue & objACE.Trustee & " "
-      Next
-    Case Instr(strUserAttr, "SID") > 0
-      strAttrValue  = OctetToHexStr(objRecordset.Fields(1).Value)
-      strAttrValue  = HexStrToSIDStr(strAttrValue)
-    Case Instr(strUserAttr, "GUID") > 0
-      strAttrValue  = OctetToHexStr(objRecordset.Fields(1).Value)
-      strAttrValue  = HexStrToGUID(strAttrValue)
-    Case strUserAttr = "memberOf"
-      strAttrList   = ""
-      For Each strAttrItem In objRecordset.Fields(1).Value
-        strAttrList = strAttrList & Mid(strAttrItem, 4, Instr(strAttrItem, ",") - 4) & " "
-      Next
-      strAttrValue = RTrim(strAttrList)
-    Case Else
-      strAttrValue  = objRecordset.Fields(1).Value
-  End Select
-
-  err.Number        = 0
-  GetAccountAttr    = strAttrValue
-
-End Function
-
-
-Private Function OctetToHexStr(strValue)
-  Dim strHexStr
-  Dim intIdx
-
-  strHexStr         = ""
-  For intIdx = 1 To Lenb(strValue)
-    strHexStr       = strHexStr & Right("0" & Hex(Ascb(Midb(strValue, intIdx, 1))), 2)
-  Next
-
-  OctetToHexStr     = strHexStr
-
-End Function
-
-
-Private Function HexStrToGUID(strValue)
-  Dim strGUID
-
-  strGUID           = ""
-
-  If Len(strValue) = 32 Then
-    strGUID         = strGUID & Mid(strValue,  7, 2) & Mid(strValue,  5, 2) & Mid(strValue,  3, 2) & Mid(strValue,  1, 2) & "-"
-    strGUID         = strGUID & Mid(strValue, 11, 2) & Mid(strValue,  9, 2) & "-"
-    strGUID         = strGUID & Mid(strValue, 15, 2) & Mid(strValue, 13, 2) & "-"
-    strGUID         = strGUID & Mid(strValue, 17, 2) & Mid(strValue, 19, 2) & "-"
-    strGUID         = strGUID & Mid(strValue, 21)
-  End If
-
-  HexStrToGUID      = strGUID
-
-End Function
-
-
-Private Function HexStrToSIDStr(strValue)
-  Dim arrSID
-  Dim strSIDStr
-  Dim intIdx, intUB, intWork
-
-  intUB             = (Len(strValue) / 2) - 1
-  ReDim arrSID(intUB)  
-  For intIdx = 0 To intUB
-    arrSID(intIdx)  = CInt("&H" & Mid(strValue, (intIdx * 2) + 1, 2))
-  Next
-
-  strSIDStr         = "S-" & arrSID(0) & "-" & arrSID(1) & "-" & arrSID(8)
-  If intUB >= 15 Then
-    intWork         = arrSID(15)
-    intWork         = (intWork * 256) + arrSID(14)
-    intWork         = (intWork * 256) + arrSID(13)
-    intWork         = (intWork * 256) + arrSID(12)
-    strSIDStr       = strSIDStr & "-" & CStr(intWork)
-    If intUB >= 22 Then
-      intWork       = arrSID(19)
-      intWork       = (intWork * 256) + arrSID(18)
-      intWork       = (intWork * 256) + arrSID(17)
-      intWork       = (intWork * 256) + arrSID(16)
-      strSIDStr     = strSIDStr & "-" & CStr(intWork)
-      intWork       = arrSID(23)
-      intWork       = (intWork * 256) + arrSID(22)
-      intWork       = (intWork * 256) + arrSID(21)
-      intWork       = (intWork * 256) + arrSID(20)
-      strSIDStr     = strSIDStr & "-" & CStr(intWork)
-    End If
-    If intUB >= 25 Then
-      intWork       = arrSID(25)
-      intWork       = (intWork * 256) + arrSID(24)
-      strSIDStr     = strSIDStr & "-" & CStr(intWork)
-    End If
-  End If
-
-  HexStrToSIDStr    = strSIDStr
-
-End Function
-
-
 Function Max(intA, intB)
 
   Select Case True
@@ -332,52 +142,6 @@ Function Max(intA, intB)
     Case Else
       Max           = intB
   End Select
-
-End Function
-
-
-Function GetCmdSQL()
-  Call DebugLog("GetCmdSQL:")
-
-  strSQLVersion     = GetBuildfileValue("SQLVersion")
-  strSQLVersionNum  = GetBuildfileValue("SQLVersionNum")
-  strRegTools       = strHKLMSQL & strSQLVersionNum & "\Tools\ClientSetup\"
-
-  Select Case True
-    Case strSQLVersion = "SQL2005"
-      objWMIReg.GetStringValue strHKLM,Mid(strRegTools, 6),"Path",strPathTools
-    Case strSQLVersion <= "SQL2012"
-      objWMIReg.GetStringValue strHKLM,Mid(strRegTools, 6),"SQLPath",strPathTools
-    Case Else
-      objWMIReg.GetStringValue strHKLM,Mid(strRegTools, 6),"ODBCToolsPath",strPathTools
-  End Select
-  If IsNull(strPathTools) Then
-    strPathTools    = ""
-  End If
-
-  Select Case True
-    Case strPathTools = ""
-      strPathCmdSQL = ""
-    Case strSQLVersion = "SQL2005"
-      strPathCmdSQL = strPathTools & "SQLCMD.EXE"
-    Case strSQLVersion <= "SQL2012"
-      strPathCmdSQL = strPathTools & "\Binn\SQLCMD.EXE"
-    Case Else
-      strPathCmdSQL = strPathTools & "SQLCMD.EXE"
-  End Select
-
-  Select Case True
-    Case strPathcmdSQL = ""
-      strCmdSQL     = ""
-    Case Else
-      strCmdSQL     = """" & strPathCmdSQL & """ -S """ & strServInst & """ -E -b -e -m-1 "
-  End Select
-
-  Call SetBuildfileValue("CmdSQL",     strCmdSQL)
-  Call SetBuildfileValue("PathCmdSQL", strPathCmdSQL)
-  Call SetBuildfileValue("RegTools",   strRegTools)
-
-  GetCmdSQL         = strCmdSQL
 
 End Function
 
@@ -462,7 +226,7 @@ Sub RunCacls(strCmd)
     Exit Sub
   End If
 
-  Call Util_RunExec(strProgCacls & " " & strCmd, "", strResponseYes, -1)
+  Call Util_RunExec(GetBuildfileValue("ProgCacls") & " " & strCmd, "", strResponseYes, -1)
   Select Case True
     Case intErrSave = 0
       ' Nothing
@@ -479,14 +243,14 @@ Sub RunCacls(strCmd)
     Case Else
       Call SetBuildMessage(strMsgError, "Error " & Cstr(intErrSave) & " " & strErrSave & " returned by " & strCmd)
   End Select
-  Wscript.Sleep strWaitShort ' Allow time for CACLS processing to complete
+  Wscript.Sleep GetBuildfileValue("WaitShort") ' Allow time for CACLS processing to complete
 
 End Sub
 
 
 Sub SetupFolder(strFolder)
   Call DebugLog("SetupFolder: " & strFolder)
-  Dim strPath, strPathParent
+  Dim strPathParent
 
   strPath           = strFolder
   If Right(strPath, 1) = "\" Then
@@ -499,9 +263,7 @@ Sub SetupFolder(strFolder)
       ' Nothing
     Case Not objFSO.FolderExists(strPathParent)
       Call SetupFolder(strPathParent)
-      Wscript.Sleep GetBuildfileValue("WaitMed")
       objFSO.CreateFolder(strPath)
-      Wscript.Sleep GetBuildfileValue("WaitShort")
     Case Else
       objFSO.CreateFolder(strPath)
       Wscript.Sleep GetBuildfileValue("WaitShort")
@@ -514,23 +276,14 @@ Sub SetDCOMSecurity(strAppId)
   Call DebugLog("SetDCOMSecurity: " & strAppId)
   Dim arrPermDCom
   Dim objHelper, objPermDCom
-  Dim strDescription, strPermDCom, strSDDLDCom
-
-  objWMIReg.GetBinaryValue strHKCR,strAppId,"LaunchPermission",arrPermDCom
-  Select Case True
-    Case IsNull(arrPermDCom) 
-      Exit Sub
-    Case strOSVersion < "6.0"
-      Exit Sub
-  End Select
-
-  objWMIReg.GetStringValue strHKCR,strAppId,"",strDescription
-  Call DebugLog(" " & strDescription & ", Appid: " & strAppId & ", Current Perm: " & strPermDCom)  
+  Dim strPermDCom, strSDDLDCom
 
   strSDDLDCom       = "(A;;CCDCLCSWRP;;;" & strSIDDistComUsers & ")"
   strPath           = "winmgmts:{impersonationLevel=impersonate}!\\" & strServer & "\ROOT\cimv2:Win32_securityDescriptorHelper"
   Set objHelper     = GetObject(strPath)
+  objWMIReg.GetBinaryValue strHKCR,strAppId,"LaunchPermission",arrPermDCom
   Call objHelper.BinarySDToSDDL(arrPermDCom, strPermDCom)
+
   intIdx            = Instr(strPermDCom, strSIDDistComUsers)
   If intIdx = 0 Then
     intIdx          = Instr(strPermDCom, "(A;;CCSW;;;BU)")
@@ -550,19 +303,6 @@ Sub SetDCOMSecurity(strAppId)
 End Sub
 
 
-Private Sub SetHKLMSQL()
-
-  strHKLMSQL        = "HKLM\SOFTWARE\Microsoft\Microsoft SQL Server\"
-
-  If GetBuildfileValue("WOWX86") = "TRUE" Then
-    strHKLMSQL      = "HKLM\SOFTWARE\Wow6432Node\Microsoft\Microsoft SQL Server\"
-  End If
-
-  Call SetBuildfileValue("HKLMSQL", strHKLMSQL)
-
-End Sub
-
-
 Sub SetParam(strParamName, strParam, strNewValue, strMessage, ByRef strList)
   Call DebugLog("SetParam: " & strParamName & " to " & strNewValue)
   Dim strBuildValue
@@ -575,9 +315,6 @@ Sub SetParam(strParamName, strParam, strNewValue, strMessage, ByRef strList)
       ' Nothing
     Case (strParam = "NO") And (strNewValue = "N/A")
       strParam      = strNewValue
-    Case (strParam = "") And (strNewValue = "YES") And (strMessage = "")
-      strParam      = strNewValue
-      strList       = strList & " " & strParamName
     Case strParam = ""
       strParam      = strNewValue
     Case strBuildValue = strNewValue
@@ -596,9 +333,10 @@ End Sub
 Sub SetRegPerm(strRegParm, strName, strAccess)
   Call DebugLog("SetRegPerm: " & strRegParm & " for " & strName)
   ' Code based on example posted by ROHAM on www.tek-tips.com/viewthread.cfm?qid=1456390
-  Dim objACE, objDACL, objSD, objSDUtil
+  Dim objACE, objDACL, objSD, objSDUtil, objWMIReg
   Dim strACEAccessAllow, strACEFullControl, strACEPropogate, strACERead, strPath, strRegKey, strSDFormatIID, strSDPathRegistry, strStatusKB933789, strTrusteeName
 
+  Set objWMIReg     = GetObject("winmgmts:{impersonationLevel=impersonate}!\\.\root\default:StdRegProv")
   strPath           = "SOFTWARE\Microsoft\Updates\Windows Server 2003\SP3\KB933789\"
   objWMIReg.GetStringValue strHKLM,strPath,"Description",strStatusKB933789
   Select Case True
@@ -656,21 +394,9 @@ Sub SetUpdate(strOnOff)
   On Error Resume Next
 
   Select Case True
-    Case strOnOff <> "ON"
-      ' Nothing
-    Case strOSVersion > "6.2"
-      colPrcEnvVars("SEE_MASK_NOZONECHECKS") = 1    ' Prevent Security Warning message hanging quiet install
-      Call Util_RunExec("NET STOP wuauserv", "", "", 2)
-    Case Else
+    Case strOnOff = "ON"
       colPrcEnvVars("SEE_MASK_NOZONECHECKS") = 1    ' Prevent Security Warning message hanging quiet install
       err.Number    = objAutoUpdate.Pause()         ' Prevent Windows Update service triggering a reboot prompt
-  End Select
-
-  Select Case True
-    Case strOnOff = "ON"
-      ' Nothing
-    Case strOSVersion > "6.2"
-      colPrcEnvVars.Remove("SEE_MASK_NOZONECHECKS") ' Allow Security Warning messages
     Case Else
       colPrcEnvVars.Remove("SEE_MASK_NOZONECHECKS") ' Allow Security Warning messages
       err.Number    =  objAutoUpdate.Resume()       ' Resume normal Window Update Service prompts
@@ -721,37 +447,6 @@ Sub SetXMLParm(objParm, strParm, strValue)
       Set objAttribute  = objParm.createAttribute(strParm)
       objAttribute.Text = strValue
       objParm.documentElement.Attributes.setNamedItem objAttribute
-  End Select
-
-End Sub
-
-
-Sub SetXMLConfigValue(objConfig, strNode, strAttr, strValue)
-  Call DebugLog("SetXMLConfigValue: " & strNode & ", " & strValue)
-  Dim objNode, objAttr
-  Dim strPrefix
-
-  Select Case True
-    Case strNode <> ""
-      Set objNode   = objConfig.documentElement.selectSingleNode(""" & strNode & """)
-      Set objAttr   = objNode.selectSingleNode(strAttr)
-    Case Else
-      Set objAttr   = objConfig.documentElement.selectSingleNode("//" & strAttr)
-  End Select
-
-  Select Case True
-    Case strValue   = ""
-      ' Nothing
-    Case (objAttr Is Nothing) And (strNode <> "")
-      Set objAttr   = objConfig.createElement(strName)
-      objAttr.Text  = strValue
-      objNode.appendChild objAttr
-    Case objAttr Is Nothing
-      Set objAttr   = objConfig.createElement(strName)
-      objAttr.Text  = strValue
-      objConfig.appendChild objAttr
-    Case Else
-      objAttr.Text  = strValue
   End Select
 
 End Sub
@@ -811,12 +506,14 @@ Sub Util_RunExec(strCmd, strMessage, strResponse, strOK)
   Call DebugLog("Util_RunExec: " & strCmd)
   Dim objCmd
   Dim intCount, intEOS
-  Dim strBox1, strBox2, strStdOut
+  Dim strBox1, strBox2, strProgCacls, strStdOut, strWaitShort
 
   On Error Resume Next
   err.Clear
   strBox1           = "[" & strResponseYes & "/" & strResponseNo & "]"
   strBox2           = "(" & strResponseYes & "/" & strResponseNo & ")?"
+  strProgCacls      = GetBuildfileValue("ProgCacls")
+  strWaitShort      = GetBuildfileValue("WaitShort")
   Set objCmd        = objShell.Exec(strCmd)
   Select Case True
     Case Not IsObject(objCmd)
@@ -897,10 +594,6 @@ End Sub
 End Class
 
 
-Sub CopyFile(strSource, strTarget)
-  Call FBUtils.CopyFile(strSource, strTarget)
-End Sub
-
 Function FormatAccount(strAccount)
   FormatAccount     = FBUtils.FormatAccount(strAccount)
 End Function
@@ -915,14 +608,6 @@ End Function
 
 Function FormatServer(strServer, strProtocol)
   FormatServer      = FBUtils.FormatServer(strServer, strProtocol)
-End Function
-
-Function GetAccountAttr(strUserAccount, strUserDNSDomain, strUserAttr)
-  GetAccountAttr       = FBUtils.GetAccountAttr(strUserAccount, strUserDNSDomain, strUserAttr)
-End Function
-
-Function GetCmdSQL()
-  GetCmdSQL         = FBUtils.GetCmdSQL()
 End Function
 
 Function Max(intA, intB)
@@ -963,10 +648,6 @@ End Function
 
 Sub SetXMLParm(objParm, strParm, strValue)
   Call FBUtils.SetXMLParm(objParm, strParm, strValue)
-End Sub
-
-Sub SetXMLConfigValue(objConfig, strNode, strValue)
-  Call FBUtils.SetXMLConfigValue(objConfig, strNode, strValue)
 End Sub
 
 Sub SetParam(strParamName, strParam, strNewValue, strMessage, ByRef strList)
