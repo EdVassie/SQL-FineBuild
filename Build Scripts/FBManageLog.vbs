@@ -151,14 +151,58 @@ Sub LogClose()
 End Sub
 
 
+Function GetStdDate(strParm)
+' GetStdDate:
+  Dim strDate
+
+  strDate           = strParm
+  Select Case True
+    Case IsNull(strDate) 
+      strDate       = Date()
+    Case strDate = ""
+      strDate       = Date()
+  End Select
+
+  strDate           = DatePart("yyyy",strDate) & "/" & Right("0" & DatePart("m", strDate), 2) & "/" & Right("0" & DatePart("d", strDate), 2)
+  GetStdDate        = strDate
+
+End Function
+
+
+Function GetStdDateTime(strParm)
+' GetStdDateTime:
+
+  GetStdDateTime    = GetStdDate(strParm) & " " & GetStdTime(strParm)
+
+End Function
+
+
+Function GetStdTime(strParm)
+' GetStdTime:
+  Dim strTime
+
+  strTime           = strParm
+  Select Case True
+    Case IsNull(strTime) 
+      strTime       = Now()
+    Case strTime = ""
+      strTime       = Now()
+  End Select
+
+  strTime           = Right("0" & DatePart("h", strTime), 2) & ":" & Right("0" & DatePart("n", strTime), 2) & ":" & Right("0" & DatePart("s", strTime), 2)
+  GetStdTime        = strTime
+
+End Function
+
+
 Private Function LogFormat(strLogText, strDest)
   Dim strId, strLogFormat
 
   Select Case True
-    Case strDest <> "E"
-      strLogFormat  = CStr(Date()) & " "
+    Case strDest = "E"
+      strLogFormat  = GetStdTime("")
     Case Else
-      strLogFormat  = ""
+      strLogFormat  = GetStdDateTime("")
   End Select
 
   Select Case True
@@ -169,7 +213,7 @@ Private Function LogFormat(strLogText, strDest)
     Case Else
       strId         = strProcessIdLabel & ":"
   End Select
-  strLogFormat      = strLogFormat & CStr(Time()) & " " & Left(strProcessIdCode & "****", 4) & " " & Left(strId & "       ", 7) & HidePasswords(strLogText)
+  strLogFormat      = strLogFormat & " " & Left(strProcessIdCode & "****", 4) & " " & Left(strId & "       ", 7) & HidePasswords(strLogText)
 
   LogFormat         = strLogFormat
 
@@ -187,11 +231,6 @@ Private Sub LogSetup()
     Case Else
       Set objLogFile     = objFSO.GetFile(Replace(strLogTxt, """", ""))
       strDebug           = GetBuildfileValue("Debug")
-      strMsgError        = GetBuildfileValue("MsgError")
-      strMsgErrorConfig  = GetBuildfileValue("MsgErrorConfig")
-      strMsgIgnore       = GetBuildfileValue("MsgIgnore")
-      strMsgInfo         = GetBuildfileValue("MsgInfo")
-      strMsgWarning      = GetBuildfileValue("MsgWarning")
       strProcessId       = GetBuildfileValue("ProcessId")
       strProcessIdLabel  = GetBuildfileValue("ProcessId")
       strStatusBypassed  = GetBuildFileValue("StatusBypassed")
@@ -291,7 +330,7 @@ Sub SetProcessId(strLabel, strDesc)
   If Left(strProcessIdLabel, 1) > "0" Then
     Call SetBuildfileValue("ProcessId",     strProcessIdLabel)
     Call SetBuildfileValue("ProcessIdDesc", strProcessIdDesc)
-    Call SetBuildfileValue("ProcessIdTime", Cstr(Time()))
+    Call SetBuildfileValue("ProcessIdTime", GetStdTime(""))
   End If
 
   strDebugDesc      = ""
@@ -335,6 +374,18 @@ End Sub
 
 Function CheckStatus(strInstName)
   CheckStatus       = FBManageLog.CheckStatus(strInstName)
+End Function
+
+Function GetStdDate(strDate)
+  GetStdDate        = FBManageLog.GetStdDate(strDate)
+End Function
+
+Function GetStdDateTime(strDateTime)
+  GetStdDateTime    = FBManageLog.GetStdDateTime(strDateTime)
+End Function
+
+Function GetStdTime(strTime)
+  GetStdTime        = FBManageLog.GetStdTime(strTime)
 End Function
 
 Function HidePasswords(strText)

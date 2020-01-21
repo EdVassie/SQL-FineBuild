@@ -96,12 +96,13 @@ Sub SetupReboot(strLabel, strDescription)
   Call DebugLog("SetupReboot:")
   Dim objShell
   Dim intIdx
-  Dim strAdminPassword, strCmd, strFBCmd, strFBPath, strFBVol, strPath, strRebootDesc, strRebootLabel, strStopAt
+  Dim strAdminPassword, strBootCount, strCmd, strFBCmd, strFBPath, strFBVol, strPath, strRebootDesc, strRebootLabel, strStopAt
 
   Call SetProcessId(strLabel, "Preparing server reboot")
   Set objShell      = CreateObject("Wscript.Shell")
   strRebootDesc     = "Reboot in progress: " & GetBuildfileValue("SQLVersion") & " " & strDescription
   strRebootLabel    = strLabel
+  Call SetBuildfileValue("BootCount", CInt(GetBuildfileValue("BootCount")) + 1)
 
   strFBCmd          = GetBuildfileValue("FBCmd")
   strFBVol          = Left(strFBCmd, 1)

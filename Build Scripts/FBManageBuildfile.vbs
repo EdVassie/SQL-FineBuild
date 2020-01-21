@@ -99,12 +99,18 @@ Sub LinkBuildfile(strLogfile)
     strLogfile      = objShell.ExpandEnvironmentStrings("%SQLLOGTXT%")
   End If
 
-  strBuildfile       = Replace(strLogfile, """", "")
-  strBuildfile       = Left(strBuildfile, Len(strBuildfile) - 4) & ".xml"
+  strBuildfile      = Replace(strLogfile, """", "")
+  strBuildfile      = Left(strBuildfile, Len(strBuildfile) - 4) & ".xml"
   If objFSO.FileExists(strBuildFile) Then
     objBuildfile.load(strBuildFile)
     Set colBuildfile = objBuildfile.documentElement.selectSingleNode("BuildFile")
   End If
+
+  strMsgError       = GetBuildfileValue("MsgError")
+  strMsgErrorConfig = GetBuildfileValue("MsgErrorConfig")
+  strMsgIgnore      = GetBuildfileValue("MsgIgnore")
+  strMsgInfo        = GetBuildfileValue("MsgInfo")
+  strMsgWarning     = GetBuildfileValue("MsgWarning")
 
 End Sub
 
@@ -126,6 +132,7 @@ Sub SetBuildMessage(strType, strMessage)
     Case Else
       strMessagePrefix = ""
   End Select
+
   Select Case True
     Case strType = strMsgErrorConfig
       strMessageOut = strMsgError & ": " & HidePasswords(strMessage)

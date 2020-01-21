@@ -726,14 +726,17 @@ Sub SetXMLParm(objParm, strParm, strValue)
 End Sub
 
 
-Sub SetXMLConfigValue(objConfig, strNode, strAttr, strValue)
-  Call DebugLog("SetXMLConfigValue: " & strNode & ", " & strValue)
+Sub SetXMLConfigValue(objConfig, strNode, strAttr, strValue, strType)
+  Call DebugLog("SetXMLConfigValue: " & strAttr & ", " & strValue)
   Dim objNode, objAttr
   Dim strPrefix
 
   Select Case True
+    Case (strNode <> "") And (strType = "A")
+      Set objNode   = objConfig.documentElement.selectSingleNode(strNode)
+      Set objAttr   = objNode.getAttribute(strAttr)
     Case strNode <> ""
-      Set objNode   = objConfig.documentElement.selectSingleNode(""" & strNode & """)
+      Set objNode   = objConfig.documentElement.selectSingleNode(strNode)
       Set objAttr   = objNode.selectSingleNode(strAttr)
     Case Else
       Set objAttr   = objConfig.documentElement.selectSingleNode("//" & strAttr)
@@ -742,12 +745,16 @@ Sub SetXMLConfigValue(objConfig, strNode, strAttr, strValue)
   Select Case True
     Case strValue   = ""
       ' Nothing
+    Case (objAttr Is Nothing) And (strNode <> "") And (strType = "A")
+      Set objAttr   = objConfig.createAttribute(strAttr)
+      objAttr.Text  = strValue
+      objNode.Attributes.setNamedItem objAttr
     Case (objAttr Is Nothing) And (strNode <> "")
-      Set objAttr   = objConfig.createElement(strName)
+      Set objAttr   = objConfig.createElement(strAttr)
       objAttr.Text  = strValue
       objNode.appendChild objAttr
     Case objAttr Is Nothing
-      Set objAttr   = objConfig.createElement(strName)
+      Set objAttr   = objConfig.createElement(strAttr)
       objAttr.Text  = strValue
       objConfig.appendChild objAttr
     Case Else
@@ -918,7 +925,7 @@ Function FormatServer(strServer, strProtocol)
 End Function
 
 Function GetAccountAttr(strUserAccount, strUserDNSDomain, strUserAttr)
-  GetAccountAttr       = FBUtils.GetAccountAttr(strUserAccount, strUserDNSDomain, strUserAttr)
+  GetAccountAttr    = FBUtils.GetAccountAttr(strUserAccount, strUserDNSDomain, strUserAttr)
 End Function
 
 Function GetCmdSQL()
@@ -965,8 +972,8 @@ Sub SetXMLParm(objParm, strParm, strValue)
   Call FBUtils.SetXMLParm(objParm, strParm, strValue)
 End Sub
 
-Sub SetXMLConfigValue(objConfig, strNode, strValue)
-  Call FBUtils.SetXMLConfigValue(objConfig, strNode, strValue)
+Sub SetXMLConfigValue(objConfig, strNode, strAttr, strValue, strType)
+  Call FBUtils.SetXMLConfigValue(objConfig, strNode, strAttr, strValue, strType)
 End Sub
 
 Sub SetParam(strParamName, strParam, strNewValue, strMessage, ByRef strList)

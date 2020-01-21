@@ -544,7 +544,7 @@ Private Function RunInstall_Process(strInstName, objInstParm)
   End Select
 
   If strParmMonitor <> "" Then
-    strCmd          = "%COMSPEC% /D /C CSCRIPT.EXE """ & FormatFolder("PathFBScripts") & "FBMonitor.vbs"" /ProcessId:" & strProcessId & " /WaitTime:" & strParmMonitor
+    strCmd          = "%COMSPEC% /D /C CSCRIPT.EXE """ & FormatFolder("PathFBScripts") & "FBMonitor.vbs"" /ProcessId:" & strProcessIdLabel & " /WaitTime:" & strParmMonitor
     Call Util_RunCmdAsync(strCmd, 0)
   End If
 
