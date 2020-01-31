@@ -49,6 +49,7 @@ Private Sub Class_Initialize
   strServer         = GetBuildfileValue("AuditServer")
   strSQLVersion     = GetBuildfileValue("SQLVersion")
   strUserDNSDomain  = ""
+  Set objWMIDNS     = Nothing
 
 End Sub
 
@@ -331,16 +332,14 @@ Function GetAddress(strAddress, strFormat, strPreserve)
   Select Case True
     Case strUserDNSServer = ""
       ' Nothing
-    Case IsObject(objWMIDNS)
-      ' Nothing
-    Case Else
+    Case objWMIDNS Is Nothing
       strDebugMsg1  = "DNS Server: " & strUserDNSServer
       Set objWMIDNS = GetObject("winmgmts:{impersonationLevel=impersonate}!\\" & strUserDNSServer & "\root\MicrosoftDNS")
   End Select
 
   strQuery          = ""
   Select Case True
-    Case Not IsObject(objWMIDNS)
+    Case objWMIDNS Is Nothing
       ' Nothing
     Case strAddrType = "IPv4"
       strQuery      = "SELECT * FROM MicrosoftDNS_AType    WHERE IPAddress   = """ & strAddress & """"

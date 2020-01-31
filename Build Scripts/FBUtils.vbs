@@ -732,32 +732,59 @@ Sub SetXMLConfigValue(objConfig, strNode, strAttr, strValue, strType)
   Dim strPrefix
 
   Select Case True
-    Case (strNode <> "") And (strType = "A")
-      Set objNode   = objConfig.documentElement.selectSingleNode(strNode)
-      Set objAttr   = objNode.getAttribute(strAttr)
-    Case strNode <> ""
-      Set objNode   = objConfig.documentElement.selectSingleNode(strNode)
-      Set objAttr   = objNode.selectSingleNode(strAttr)
+    Case strNode = ""
+      ' Nothing
+    Case IsNull(objConfig.documentElement.selectSingleNode(strNode))
+      Set objNode   = objConfig.createElement(strNode)
+      objConfig.appendChild objNode
     Case Else
-      Set objAttr   = objConfig.documentElement.selectSingleNode("//" & strAttr)
+      Set objNode   = objConfig.documentElement.selectSingleNode(strNode)
   End Select
 
   Select Case True
-    Case strValue   = ""
+    Case strType <> "A"
       ' Nothing
-    Case (objAttr Is Nothing) And (strNode <> "") And (strType = "A")
+    Case IsNull(objNode.getAttribute(strAttr))
       Set objAttr   = objConfig.createAttribute(strAttr)
       objAttr.Text  = strValue
       objNode.Attributes.setNamedItem objAttr
-    Case (objAttr Is Nothing) And (strNode <> "")
-      Set objAttr   = objConfig.createElement(strAttr)
-      objAttr.Text  = strValue
-      objNode.appendChild objAttr
-    Case objAttr Is Nothing
-      Set objAttr   = objConfig.createElement(strAttr)
-      objAttr.Text  = strValue
-      objConfig.appendChild objAttr
     Case Else
+      objNode.setAttribute strAttr, strValue
+  End Select
+
+  Select Case True
+    Case strType = "A"
+      ' Nothing
+    Case strNode = ""
+      ' Nothing
+    Case objNode.selectSingleNode(strAttr) Is Nothing
+      Set objAttr   = objConfig.createElement(strAttr)
+      objNode.appendChild objAttr
+      If strValue <> "" Then
+        objAttr.Text = strValue
+     End If
+    Case (objNode.selectSingleNode(strAttr).Text = "") And (strValue = "")
+     ' Nothing
+    Case Else
+      Set objAttr   = objNode.selectSingleNode(strAttr)
+      objAttr.Text  = strValue
+  End Select
+
+  Select Case True
+    Case strType = "A"
+      ' Nothing
+    Case strNode <> ""
+      ' Nothing
+    Case objConfig.documentElement.selectSingleNode("//" & strAttr) Is Nothing
+      Set objAttr   = objConfig.createElement(strAttr)
+      objConfig.appendChild objAttr
+      If strValue <> "" Then
+        objAttr.Text = strValue
+     End If
+    Case (objConfig.documentElement.selectSingleNode("//" & strAttr).Text = "") And (strValue = "")
+     ' Nothing
+    Case Else
+      Set objAttr   = objConfig.documentElement.selectSingleNode("//" & strAttr)
       objAttr.Text  = strValue
   End Select
 

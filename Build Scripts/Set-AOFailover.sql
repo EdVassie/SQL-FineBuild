@@ -1,13 +1,19 @@
---  Copyright FineBuild Team © 2018-2019.  Distributed under Ms-Pl License
+--  Copyright FineBuild Team © 2018-2020.  Distributed under Ms-Pl License
 USE master
 GO
 
--- Process Get AGServers Function
-IF EXISTS (SELECT 1 FROM sys.functions WHERE name = N'FB_GetAGServers')
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+-- Process FB_GetAGServers Function
+IF EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'FUNCTION' AND ROUTINE_NAME = N'FB_GetAGServers')
   DROP FUNCTION dbo.FB_GetAGServers;
 GO
 
-CREATE OR ALTER FUNCTION [dbo].[FB_GetAGServers] 
+CREATE FUNCTION [dbo].[FB_GetAGServers] 
    (@AGName         NVARCHAR(128)
    ,@TargetServer   NVARCHAR(128))
 
@@ -16,8 +22,8 @@ RETURNS @AGServers  TABLE
   ,AGType           CHAR(1)
   ,AvailabilityMode INT
   ,RequiredCommit   INT
-  ,ServerName       NVARCHAR(128)
-  ,ServerRole       NVARCHAR(128)
+  ,PrimaryServer    NVARCHAR(128)
+  ,SecondaryServer  NVARCHAR(128)
   ,Endpoint         NVARCHAR(128)
   ,ServerId         INT
   ,TargetServer     CHAR(1)) 
@@ -25,14 +31,18 @@ RETURNS @AGServers  TABLE
 AS
 -- FB_GetAGServers
 --
+--  Copyright FineBuild Team © 2019.  Distributed under Ms-Pl License
+--
 -- Get list of Servers and their roles in an Availability Group
 -- The routine will work out from the AG Name what type of availability group is involved, and process accordingly
 --
--- Syntax: SELECT dbo.FB_GetAGServers('AGName','') to automatically select first Secondary as the TargetServer
---     or: SELECT dbo.FB_GetAGServers('AGName','TargetServer') if a specific target server is required
+-- Syntax: SELECT dbo.FB_GetAGServers('%','')      to automatically select first Secondary as the TargetServer for each Availability Group
+--     or: SELECT dbo.FB_GetAGServers('AGName','') to automatically select first Secondary as the TargetServer for given Availability Group
+--     or: SELECT dbo.FB_GetAGServers('AGName','TargetServer') if a specific target server is required for given Availability Group
 --
 -- Date        Name  Comment
--- 12/11/2019  EMV   Initial code
+-- 12/11/2019  EdV   Initial code
+-- 28/01/2020  EdV   Initial FineBuild Version
 --
 BEGIN;
 
@@ -43,44 +53,48 @@ BEGIN;
   INSERT INTO @Parameters (AGName,TargetServer) 
   VALUES(@AGName,@TargetServer);
 
-  INSERT INTO @AGServers (AGName, AGType, AvailabilityMode, RequiredCommit, ServerName, ServerRole, Endpoint, ServerId)
+  INSERT INTO @AGServers (AGName, AGType, AvailabilityMode, RequiredCommit, PrimaryServer, SecondaryServer, Endpoint, ServerId)
   SELECT
    ag.name
   ,CASE WHEN ag.is_distributed = 1 THEN 'D' WHEN ag.basic_features = 1 THEN 'B' WHEN ag.cluster_type_desc = 'none' THEN 'N' ELSE 'C' END AS AGType
-  ,ar.availability_mode
+  ,ars.availability_mode
   ,ISNULL(ag.required_synchronized_secondaries_to_commit, 0)
-  ,ar.replica_server_name
-  ,CASE WHEN ars.replica_id IS NULL THEN 'P' ELSE LEFT(ars.role_desc, 1) END
-  ,SUBSTRING(ar.endpoint_url, 7, CHARINDEX('.',ar.endpoint_url) - 7)
-  ,ROW_NUMBER() OVER(ORDER BY CASE WHEN ars.role_desc = 'SECONDARY' THEN 1 ELSE 2 END, ar.replica_server_name)
+  ,arp.replica_server_name
+  ,ars.replica_server_name
+  ,SUBSTRING(ISNULL(ars.endpoint_url, arp.endpoint_url), 7, CHARINDEX('.', ISNULL(ars.endpoint_url, arp.endpoint_url)) - 7)
+  ,ROW_NUMBER() OVER(PARTITION BY AGName ORDER BY ars.replica_server_name)
   FROM @Parameters p
-  JOIN [sys].[availability_groups] ag ON ag.name = p.AGName
-  JOIN [sys].[availability_replicas] ar ON ar.group_id = ag.group_id
-  LEFT JOIN [sys].[dm_hadr_availability_replica_states] ars ON ars.group_id = ag.group_id AND ars.replica_id = ar.replica_id;
+  JOIN [sys].[availability_groups] ag ON ag.name LIKE p.AGName
+  LEFT JOIN [sys].[availability_replicas] ars ON ars.group_id = ag.group_id
+  LEFT JOIN [sys].[dm_hadr_availability_replica_states] arss ON arss.group_id = ag.group_id AND arss.replica_id = ars.replica_id AND arss.role <> 1
+  LEFT JOIN [sys].[availability_replicas] arp ON arp.group_id = ag.group_id
+  LEFT JOIN [sys].[dm_hadr_availability_replica_states] arps ON arps.group_id = ag.group_id AND arps.replica_id = arp.replica_id AND arps.role = 1;
 
   UPDATE @AGServers SET
    TargetServer = 'Y'
   FROM @Parameters p
-  WHERE ServerId = (SELECT MAX(ServerId) FROM @AGServers WHERE (ServerId = 1) OR (p.TargetServer = Endpoint AND ServerRole = 'S'));
+  WHERE ServerId = (SELECT MAX(ServerId) FROM @AGServers WHERE (ServerId = 1) OR (p.TargetServer = Endpoint) GROUP BY AGName);
 
   RETURN;
 
 END;
 GO
 
--- Process AG Failover Procedure
+-- Process FB_AGFailover Procedure
 IF EXISTS (SELECT 1 FROM sys.procedures WHERE name = N'FB_AGFailover')
   DROP PROCEDURE dbo.FB_AGFailover;
 GO
 
-CREATE OR ALTER PROC [dbo].[FB_AGFailover]
- @AGName            NVARCHAR(120)            -- Name of AG for Failover
+CREATE       PROC [dbo].[FB_AGFailover]
+ @AGName            NVARCHAR(120)      = '%' -- Name of AG for Failover
 ,@TargetServer      NVARCHAR(128)      = ''  -- Name of desired New Primary server
 ,@Execute           CHAR(1)            = 'Y' -- Execute commands
 ,@RemoteCall        VARCHAR(1)         = 'N' -- Internal Use Only
 ,@Operation         CHAR(1)            = ''  -- Internal Use Only
 AS
 -- FB_AGFailover
+--
+--  Copyright FineBuild Team © 2020.  Distributed under Ms-Pl License
 --
 -- This routine performs a failover of an Availability Group
 -- The routine will work out from the AG Name what type of availability group is involved, and process accordingly
@@ -94,9 +108,9 @@ AS
 -- The Main Control Process works out which nodes are Primary and Secondary, and performs the relevant commands on them
 --
 -- Date        Name  Comment
--- 30/05/2019  EMV   Initial code
--- 25/06/2019  EMV   Added @TargetServer and @Execute logic
--- 12/11/2019  EMV   Replaced population logic for #AGServers with function call
+-- 30/05/2019  EdV   Initial code
+-- 25/06/2019  EdV   Added @TargetServer and @Execute logic
+-- 28/01/2020  EdV   Added @TargetServer and @Execute logic
 --
 BEGIN;
   SET NOCOUNT ON;
@@ -129,9 +143,9 @@ BEGIN;
   FROM #Parameters p;
 
   DROP TABLE IF EXISTS #AGServers;
-  SELECT *  -- 12/11/19 EdV
-  INTO #AGServers -- 12/11/19 EdV
-  FROM dbo.FB_GetAGServers((SELECT AGName FROM #Parameters), (SELECT TargetServer FROM #Parameters)); -- 12/11/19 EdV
+  SELECT *
+  INTO #AGServers
+  FROM dbo.FB_GetAGServers((SELECT AGName FROM #Parameters), (SELECT TargetServer FROM #Parameters));
 
   IF (SELECT ExecProcess FROM #Parameters) <> 'Y' SELECT * FROM #AGServers;
 
@@ -144,45 +158,46 @@ BEGIN;
     SELECT
      @SQLText          = @SQLText + p.CRLF + 'Current Primary Server: '   + a.ServerName
     FROM #Parameters p
-    JOIN #AGServers a ON a.AGName = p.AGName
+    JOIN #AGServers a ON a.AGName LIKE p.AGName
     WHERE a.ServerRole = 'P';
     SELECT
      @SQLText          = @SQLText + p.CRLF + 'Current Secondary Server: ' + a.ServerName  
     FROM #Parameters p
-    JOIN #AGServers a ON a.AGName = p.AGName
+    JOIN #AGServers a ON a.AGName LIKE p.AGName
     WHERE a.TargetServer = 'Y';
     SELECT
      @SQLText          = @SQLText + p.CRLF + REPLICATE('*', 40)
     FROM #Parameters p;
     PRINT @SQLText;
+    
+    SELECT
+     @SQLText       = p.CRLF + 'EXECUTE [' + a.ServerName + '].master.dbo.FB_AGFailover @AGName=''' + p.AGName + ''', @TargetServer=''' + p.TargetServer + ''', @RemoteCall=''Y'',@Operation = ''S'''
+    FROM #Parameters p
+    JOIN #AGServers a ON a.AGName LIKE p.AGName
+    WHERE a.ServerRole = 'P';
+    IF (SELECT ExecProcess FROM #Parameters) = 'Y'  EXECUTE sp_executeSQL @SQLText;
+    IF (SELECT ExecProcess FROM #Parameters) <> 'Y' PRINT @SQLText;
 
     SELECT
      @SQLText       = p.CRLF + 'EXECUTE [' + a.ServerName + '].master.dbo.FB_AGFailover @AGName=''' + p.AGName + ''', @TargetServer=''' + p.TargetServer + ''', @RemoteCall=''Y'',@Operation = ''S'''
     FROM #Parameters p
-    JOIN #AGServers a ON a.AGName = p.AGName
-    WHERE a.ServerRole = 'P';
-    IF (SELECT ExecProcess FROM #Parameters) = 'Y'  EXECUTE sp_executeSQL @SQLText;
-    IF (SELECT ExecProcess FROM #Parameters) <> 'Y' PRINT @SQLText;
-    SELECT
-     @SQLText       = p.CRLF + 'EXECUTE [' + a.ServerName + '].master.dbo.FB_AGFailover @AGName=''' + p.AGName + ''', @TargetServer=''' + p.TargetServer + ''', @RemoteCall=''Y'',@Operation = ''S'''
-    FROM #Parameters p
-    JOIN #AGServers a ON a.AGName = p.AGName
+    JOIN #AGServers a ON a.AGName LIKE p.AGName
     WHERE a.ServerRole = 'S';
     IF (SELECT ExecProcess FROM #Parameters) = 'Y'  EXECUTE sp_executeSQL @SQLText;
     IF (SELECT ExecProcess FROM #Parameters) <> 'Y' PRINT @SQLText;
-
+	
     SELECT
      @SQLText       = p.CRLF + 'EXECUTE [' + a.ServerName + '].master.dbo.FB_AGFailover @AGName=''' + p.AGName + ''', @TargetServer=''' + p.TargetServer + ''', @RemoteCall=''Y'',@Operation = ''R'''
     FROM #Parameters p
-    JOIN #AGServers a ON a.AGName = p.AGName
+    JOIN #AGServers a ON a.AGName LIKE p.AGName
     WHERE a.ServerRole = 'P';
     IF (SELECT ExecProcess FROM #Parameters) = 'Y'  EXECUTE sp_executeSQL @SQLText;
     IF (SELECT ExecProcess FROM #Parameters) <> 'Y' PRINT @SQLText;
-
+ 
     SELECT
      @SQLText       = p.CRLF + 'EXECUTE [' + a.ServerName + '].master.dbo.FB_AGFailover @AGName=''' + p.AGName + ''', @TargetServer=''' + p.TargetServer + ''', @RemoteCall=''Y'',@Operation = ''F'''
     FROM #Parameters p
-    JOIN #AGServers a ON a.AGName = p.AGName
+    JOIN #AGServers a ON a.AGName LIKE p.AGName
     WHERE a.TargetServer = 'Y';
     IF (SELECT ExecProcess FROM #Parameters) = 'Y'  EXECUTE sp_executeSQL @SQLText;
     IF (SELECT ExecProcess FROM #Parameters) <> 'Y' PRINT @SQLText;
@@ -190,18 +205,19 @@ BEGIN;
     SELECT
      @SQLText       = p.CRLF + 'EXECUTE [' + a.ServerName + '].master.dbo.FB_AGFailover @AGName=''' + p.AGName + ''', @TargetServer=''' + p.TargetServer + ''', @RemoteCall=''Y'',@Operation = ''A'''
     FROM #Parameters p
-    JOIN #AGServers a ON a.AGName = p.AGName
-    WHERE a.ServerRole = 'P' AND (a.AvailabilityMode = 0 OR a.AGType IN ('D','N'));
-    IF (SELECT ExecProcess FROM #Parameters) = 'Y'  EXECUTE sp_executeSQL @SQLText;
-    IF (SELECT ExecProcess FROM #Parameters) <> 'Y' PRINT @SQLText;
-    SELECT
-     @SQLText       = p.CRLF + 'EXECUTE [' + a.ServerName + '].master.dbo.FB_AGFailover @AGName=''' + p.AGName + ''', @TargetServer=''' + p.TargetServer + ''', @RemoteCall=''Y'',@Operation = ''A'''
-    FROM #Parameters p
-    JOIN #AGServers a ON a.AGName = p.AGName
-    WHERE a.ServerRole = 'S' AND (a.AvailabilityMode = 0 OR a.AGType = IN ('D','N'));
+    JOIN #AGServers a ON a.AGName LIKE p.AGName
+    WHERE a.ServerRole = 'P' AND (a.AvailabilityMode = 0 OR a.AGType = 'D');
     IF (SELECT ExecProcess FROM #Parameters) = 'Y'  EXECUTE sp_executeSQL @SQLText;
     IF (SELECT ExecProcess FROM #Parameters) <> 'Y' PRINT @SQLText;
 
+    SELECT
+     @SQLText       = p.CRLF + 'EXECUTE [' + a.ServerName + '].master.dbo.FB_AGFailover @AGName=''' + p.AGName + ''', @TargetServer=''' + p.TargetServer + ''', @RemoteCall=''Y'',@Operation = ''A'''
+    FROM #Parameters p
+    JOIN #AGServers a ON a.AGName LIKE p.AGName
+    WHERE a.ServerRole = 'S' AND (a.AvailabilityMode = 0 OR a.AGType = 'D');
+    IF (SELECT ExecProcess FROM #Parameters) = 'Y'  EXECUTE sp_executeSQL @SQLText;
+    IF (SELECT ExecProcess FROM #Parameters) <> 'Y' PRINT @SQLText;
+	
     SELECT
      @SQLText       = REPLICATE('*', 40) +
                       p.CRLF + 'SQL Failover of ' + p.AGName + ' to ' + a.ServerName + ' complete'
@@ -213,7 +229,7 @@ BEGIN;
                       p.CRLF + 'Update DNS Alias for ' + p.AGName + ' to point to ' + a.ServerName
     FROM #Parameters p
     JOIN #AGServers a ON a.AGName = p.AGName
-    WHERE a.TargetServer = 'Y' AND a.AGType = IN ('D','N');
+    WHERE a.TargetServer = 'Y' AND a.AGType = 'D';
     PRINT @SQLText;
 
   END;
@@ -245,7 +261,7 @@ BEGIN;
     BEGIN;
       SELECT
        @SQLText     = CASE WHEN @NonSync > 0 THEN 'Waiting for Primary states to be SYNCHRONIZED for ' + Cast(@NonSync AS varchar(8)) + ' databases'
-                      ELSE '' END;
+                           ELSE '' END;
       IF @SQLText <> '' PRINT @SQLText;
       WAITFOR DELAY '00:00:01'
       SELECT
@@ -259,6 +275,7 @@ BEGIN;
       JOIN [master].[sys].[dm_hadr_database_replica_states] drs2 ON drs2.group_id = ar3.group_id AND drs2.replica_id = ar3.replica_id AND drs2.database_id = drs1.database_id
       WHERE drs2.synchronization_state_desc NOT IN ('SYNCHRONIZED', 'NOT SYNCHRONIZING') OR drs2.last_commit_lsn <> drs1.last_commit_lsn;
     END;
+
     SELECT
      @SQLText       = 'ALTER AVAILABILITY GROUP [' + p.AGName + '] SET (ROLE=SECONDARY);' 
     FROM #Parameters p;
@@ -299,21 +316,24 @@ BEGIN;
 END;
 GO
 
--- Process AG Post Failover Procedure
+-- Process FB_AGPostFailover Procedure
 IF EXISTS (SELECT 1 FROM sys.procedures WHERE name = N'FB_AGPostFailover')
   DROP PROCEDURE dbo.FB_AGPostFailover;
 GO
 
-ALTER PROC [dbo].[FB_AGPostFailover]
+CREATE PROC [dbo].[FB_AGPostFailover]
 AS
 -- FB_AGPostFailover
+--
+--  Copyright FineBuild Team © 2020.  Distributed under Ms-Pl License
 --
 -- This routine performs post-failover tasks for an Availability Group
 --
 -- Syntax: EXEC FB_AGPostFailover
 --
 -- Date        Name  Comment
--- 25/06/2019  EMV   Initial code
+-- 25/06/2019  EdV   Initial code
+-- 28/01/2020  EdV   Initial FineBuild Version
 --
 BEGIN;
   SET NOCOUNT ON;
@@ -362,11 +382,9 @@ BEGIN;
   CROSS JOIN sys.dm_hadr_availability_replica_states rs
   LEFT JOIN sys.availability_replicas ar
     ON rs.replica_id = ar.replica_id AND rs.group_id = ar.group_id
-  LEFT JOIN sys.databases d
-    ON d.name = SUBSTRING(LEFT(performance_condition, CHARINDEX('|>|', performance_condition) - 1), LEN('SQLServer:Databases|Percent Log Used|') + 1, LEN(performance_condition))
   WHERE UPPER(ar.replica_server_name) = @ServerName
   AND a.name LIKE 'DB %: Log Usage%'
-  AND d.name IS NOT null
+  AND HAS_DBACCESS(SUBSTRING(LEFT(performance_condition, CHARINDEX('|>|', performance_condition) - 1), LEN('SQLServer:Databases|Percent Log Used|') + 1, LEN(performance_condition))) = 1
   ORDER BY a.name;
 
   OPEN Log_Alerts;
@@ -561,300 +579,5 @@ EXEC msdb.dbo.sp_add_alert @name=N'Event - AG State Change',
 		@include_event_description_in=0, 
 		@category_name=N'[Uncategorized]', 
 		@job_name=N'DBA: AG State Change';
-
-GO
-
--- Create table for System Data Copy Job Exceptions
-
-IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[FB_AGSystemDataJobExceptions]') AND type in (N'U'))
-  DROP TABLE [dbo].[FB_AGSystemDataJobExceptions];
-
-CREATE TABLE [dbo].[FB_AGSystemDataJobExceptions]
-([Id]          INTEGER IDENTITY(1,1)
-,[AGName]      NVARCHAR(120) NOT NULL
-,[JobName]     NVARCHAR(120) NOT NULL
-,CONSTRAINT [PK_AGSystemDataJobExceptions] PRIMARY KEY CLUSTERED ([Id] ASC));
-
-IF EXISTS (SELECT 1 FROM sys.procedures WHERE name = N'FB_AGSystemData')
-  DROP PROCEDURE dbo.FB_AGSystemData;
-GO
-
-CREATE PROC [dbo].[FB_AGSystemData]
- @AGName            NVARCHAR(120)            -- Name of AG for Failover
-,@Execute           CHAR(1)            = 'Y' -- Execute commands
-,@TargetServer      NVARCHAR(120)      = ''  -- Internal Use Only
-,@RemoteCall        VARCHAR(1)         = 'N' -- Internal Use Only
-,@Operation         CHAR(1)            = ''  -- Internal Use Only
-AS
--- FB_AGSystemData
---
--- This routine copies System Data (Logins, jobs, etc) from the Primary to all Secondary servers
---
--- Syntax: EXEC FB_AGSystemData @AGName='AGName'
---
--- Do not use any of the parameters marked 'Internal Use Only', they are used within the Main Control Process
--- This procedure requires that DbaTools has been installed from https://dbatools.io/
---
--- This Proc can be run on either the Primary or a Secondary server in the AG
--- The Main Control Process works out which nodes are Primary and Secondary, and performs the relevant commands on them
---
--- Date        Name  Comment
--- 30/05/2019  EMV   Initial code
--- 25/06/2019  EMV   Added @TargetServer and @Execute logic
--- 12/11/2019  EMV   Rewritten to eliminate hard code of Primary and Secondary server names
---
-BEGIN;
-  SET NOCOUNT ON;
-
-  DECLARE
-   @JobName         NVARCHAR(128)
-  ,@ScheduleId      VARCHAR(8)
-  ,@SQLText         NVARCHAR(2000) = '';
-
-  DECLARE @Parameters TABLE
-  (AGName           NVARCHAR(128)
-  ,ExecProcess      CHAR(1)
-  ,PrimaryServer    NVARCHAR(128)
-  ,TargetServer     NVARCHAR(128)
-  ,CRLF             CHAR(2)
-  ,RemoteCall       CHAR(1)
-  ,Operation        CHAR(1));
-
-  INSERT INTO @Parameters (AGName,ExecProcess,PrimaryServer,TargetServer,CRLF,RemoteCall,Operation)
-  VALUES (
-   @AGName
-  ,@Execute
-  ,@@ServerName
-  ,@TargetServer
-  ,Char(13) + Char(10)
-  ,@RemoteCall
-  ,@Operation);
-  UPDATE @Parameters SET
-   AGName           = REPLACE(REPLACE(AGName, '[',''),']','')
-  FROM @Parameters p;
-  
-  IF (SELECT RemoteCall FROM @Parameters) <> 'Y' -- Main Control Process
-  BEGIN;
-
-    DROP TABLE IF EXISTS #AGServers;
-    SELECT *
-    INTO #AGServers
-    FROM dbo.FB_GetAGServers((SELECT AGName FROM @Parameters), '');
-    UPDATE @Parameters SET 
-     PrimaryServer  = ServerName 
-    FROM #AGServers WHERE ServerRole = 'P';
-    IF (SELECT ExecProcess FROM @Parameters) <> 'Y' 
-      SELECT * FROM #AGServers;
- 
-    SELECT
-     @SQLText       = 'Copy Critical Data in System Databases for : ' + p.AGName
-    FROM @Parameters p;
-    SELECT
-     @SQLText       = @SQLText + p.CRLF + 'Current Primary Server: '   + a.ServerName
-    FROM @Parameters p
-    JOIN #AGServers a ON a.AGName = p.AGName
-    WHERE a.ServerRole = 'P';
-    SELECT
-     @SQLText       = @SQLText + p.CRLF + 'Current Secondary Server: ' + a.ServerName  
-    FROM @Parameters p
-    JOIN #AGServers a ON a.AGName = p.AGName
-    WHERE a.TargetServer = 'Y';
-    SELECT
-     @SQLText       = @SQLText + p.CRLF + REPLICATE('*', 40)
-    FROM @Parameters p;
-    PRINT @SQLText;
-
-    SET @SQLText    = '';
-    SELECT          -- Copy Critical Data
-     @SQLText       = @SQLText + p.CRLF + 'EXECUTE [' + p.PrimaryServer + '].master.dbo.FB_AGSystemData @AGName=''' + p.AGName + ''', @TargetServer=''' + a.ServerName + ''', @RemoteCall=''Y'', @Operation = ''C'' '
-    FROM @Parameters p
-    JOIN #AGServers a ON a.AGName = p.AGName
-    WHERE a.ServerRole = 'S';
-    PRINT @SQLText;
-    IF ((SELECT ExecProcess FROM @Parameters) = 'Y') AND (@SQLText <> '') EXECUTE sp_executeSQL @SQLText;
-
-    SET @SQLText    = '';
-    SELECT          -- Update Schedule data
-     @SQLText       = @SQLText + p.CRLF + 'EXECUTE [' + a.ServerName + '].master.dbo.FB_AGSystemData @AGName=''' + p.AGName + ''', @TargetServer=''' + a.ServerName + ''', @RemoteCall=''Y'', @Operation = ''S'' '
-    FROM @Parameters p
-    JOIN #AGServers a ON a.AGName = p.AGName
-    WHERE a.ServerRole = 'S';
-    PRINT @SQLText;
-    IF ((SELECT ExecProcess FROM @Parameters) = 'Y') AND (@SQLText <> '') EXECUTE sp_executeSQL @SQLText;
-
-    SET @SQLText    = '';
-    SELECT          -- Update Job data
-     @SQLText       = @SQLText + p.CRLF + 'EXECUTE [' + p.PrimaryServer + '].master.dbo.FB_AGSystemData @AGName=''' + p.AGName + ''', @TargetServer=''' + a.ServerName + ''', @RemoteCall=''Y'', @Operation = ''J'' '
-    FROM @Parameters p
-    JOIN #AGServers a ON a.AGName = p.AGName
-    WHERE a.ServerRole = 'S';
-    PRINT @SQLText;
-    IF ((SELECT ExecProcess FROM @Parameters) = 'Y') AND (@SQLText <> '') EXECUTE sp_executeSQL @SQLText;
-
-    SET @SQLText    = '';
-    SELECT          -- Enable Schedule Exceptions
-     @SQLText       = @SQLText + p.CRLF + 'EXECUTE [' + a.ServerName + '].master.dbo.FB_AGSystemData @AGName=''' + p.AGName + ''', @TargetServer=''' + a.ServerName + ''', @RemoteCall=''Y'', @Operation = ''E'' '
-    FROM @Parameters p
-    JOIN #AGServers a ON a.AGName = p.AGName
-    WHERE a.ServerRole = 'S';
-    PRINT @SQLText;
-    IF ((SELECT ExecProcess FROM @Parameters) = 'Y') AND (@SQLText <> '') EXECUTE sp_executeSQL @SQLText;
-
-    SELECT
-     @SQLText       = REPLICATE('*', 40) +
-                      p.CRLF + 'Critical Data copy for ' + p.AGName + ' complete'
-        FROM @Parameters p;
-    PRINT @SQLText;
-
-  END;
-
-  -- Start of Utility Functions called from the Main Control Process
-
-  IF (SELECT Operation FROM @Parameters) IN ('C') -- Copy Critical Data
-  BEGIN; 
-   
-    -- Credentials    also need to be copied but cannot be done using this method because elevated privileges are required on the target server to save passwords
-    -- Linked Servers also need to be copied but cannot be done using this method because elevated privileges are required on the target server to save passwords
-
-    SELECT @SQLText = 'xp_cmdshell ''MODE CON COLS=120 && POWERSHELL Copy-DbaAgentJobCategory -Source "' +  p.PrimaryServer + '" -Destination "' + p.TargetServer + '" -Force'''
-    FROM @Parameters p;
-    PRINT @SQLText;
-    IF (SELECT ExecProcess FROM @Parameters) = 'Y'  EXECUTE sp_executeSQL @SQLText;
-
-    SELECT @SQLText = 'xp_cmdshell ''MODE CON COLS=120 && POWERSHELL Copy-DbaLogin            -Source "' + p.PrimaryServer + '" -Destination "' + p.TargetServer + '" -Force'''
-    FROM @Parameters p;
-    PRINT @SQLText;
-    IF (SELECT ExecProcess FROM @Parameters) = 'Y'  EXECUTE sp_executeSQL @SQLText;
-
-    SELECT @SQLText = 'xp_cmdshell ''MODE CON COLS=120 && POWERSHELL Copy-DbaAgentOperator    -Source "' + p.PrimaryServer + '" -Destination "' + p.TargetServer + '" -Force'''
-    FROM @Parameters p;
-    PRINT @SQLText;
-    IF (SELECT ExecProcess FROM @Parameters) = 'Y'  EXECUTE sp_executeSQL @SQLText;
-
-    SELECT @SQLText = 'xp_cmdshell ''MODE CON COLS=120 && POWERSHELL Copy-DbaAgentAlert       -Source "' + p.PrimaryServer + '" -Destination "' + p.TargetServer + '" -Force'''
-    FROM @Parameters p;
-    PRINT @SQLText;
-    IF (SELECT ExecProcess FROM @Parameters) = 'Y'  EXECUTE sp_executeSQL @SQLText;
-
-    SELECT @SQLText = 'xp_cmdshell ''MODE CON COLS=120 && POWERSHELL Copy-DbaAgentProxy       -Source "' + p.PrimaryServer + '" -Destination "' + p.TargetServer + '" -Force'''
-    FROM @Parameters p;
-    PRINT @SQLText;
-    IF (SELECT ExecProcess FROM @Parameters) = 'Y'  EXECUTE sp_executeSQL @SQLText;
-
-    SELECT @SQLText = 'xp_cmdshell ''MODE CON COLS=120 && POWERSHELL Copy-DbaAgentSchedule    -Source "' + p.PrimaryServer + '" -Destination "' + p.TargetServer + '" -Force'''
-    FROM @Parameters p;
-    PRINT @SQLText;
-    IF (SELECT ExecProcess FROM @Parameters) = 'Y'  EXECUTE sp_executeSQL @SQLText;
-
-    SELECT @SQLText = 'xp_cmdshell ''MODE CON COLS=120 && POWERSHELL Copy-DbaDbMail           -Source "' + p.PrimaryServer + '" -Destination "' + p.TargetServer + '" -Force'''
-    FROM @Parameters p;
-    PRINT @SQLText;
-    IF (SELECT ExecProcess FROM @Parameters) = 'Y'  EXECUTE sp_executeSQL @SQLText;
-
-    SELECT @SQLText = 'xp_cmdshell ''MODE CON COLS=120 && POWERSHELL Copy-DbaSpConfigure      -Source "' + p.PrimaryServer + '" -Destination "' + p.TargetServer + '"'''
-    FROM @Parameters p;
-    PRINT @SQLText;
-    IF (SELECT ExecProcess FROM @Parameters) = 'Y'  EXECUTE sp_executeSQL @SQLText;
-
-    SELECT @SQLText = 'xp_cmdshell ''MODE CON COLS=120 && POWERSHELL Copy-DbaSysDbUserObject  -Source "' + p.PrimaryServer + '" -Destination "' + p.TargetServer + '" -Force'''
-    FROM @Parameters p;
-    PRINT @SQLText;
-    IF (SELECT ExecProcess FROM @Parameters) = 'Y'  EXECUTE sp_executeSQL @SQLText;
-
-    SELECT @SQLText = 'xp_cmdshell ''MODE CON COLS=120 && POWERSHELL Copy-DbaAgentJob         -Source "' + p.PrimaryServer + '" -Destination "' + p.TargetServer + '" -Force -DisableOnDestination'''
-    FROM @Parameters p;
-    PRINT @SQLText;
-    IF (SELECT ExecProcess FROM @Parameters) = 'Y'  EXECUTE sp_executeSQL @SQLText;
-
-    SELECT @SQLText = 'Copy of Critical Data to server ' + p.TargetServer
-    FROM @Parameters p;
-    PRINT @SQLText;
-    PRINT '';
-  END;
-
-  IF (SELECT Operation FROM @Parameters) = 'S' -- Update Schedule data on Target System
-  BEGIN; 
-    
-    DECLARE Job_Schedules CURSOR FAST_FORWARD FOR
-    SELECT
-     CAST(s.schedule_id AS varchar(8))
-    FROM msdb.dbo.sysschedules s
-    ORDER BY s.schedule_id;
-
-    OPEN Job_Schedules;
-    FETCH NEXT FROM Job_Schedules INTO @ScheduleId;
-    WHILE @@FETCH_STATUS = 0  
-    BEGIN;
-      SELECT 
-       @SQLText     = 'EXECUTE msdb.dbo.sp_update_schedule @schedule_id=''' + @Scheduleid + ''',@enabled=0'
-      FROM @Parameters p;
-      PRINT @SQLText;
-      IF (SELECT ExecProcess FROM @Parameters) = 'Y'  EXECUTE sp_executeSQL @SQLText;
-      FETCH NEXT FROM Job_Schedules INTO @ScheduleId;
-    END;
-    CLOSE Job_Schedules;
-    DEALLOCATE Job_Schedules;
-
-    SELECT @SQLText = 'Update of Schedule Data on server ' + p.TargetServer
-    FROM @Parameters p;
-    PRINT @SQLText;
-    PRINT '';
-
-  END;
-
-  IF (SELECT Operation FROM @Parameters) = 'J' -- Update Job data on Target System
-  BEGIN; 
-
-    DECLARE Job_Names CURSOR FAST_FORWARD FOR
-    SELECT
-     j.name
-    FROM msdb.dbo.sysjobs j
-    WHERE enabled = 1
-    ORDER BY j.name;
-
-    OPEN Job_Names;
-    FETCH NEXT FROM Job_Names INTO @JobName;
-    WHILE @@FETCH_STATUS = 0  
-    BEGIN;
-      SELECT 
-       @SQLText     = 'EXECUTE [' + p.TargetServer + '].msdb.dbo.sp_update_job @job_name=''' + @JobName + ''',@enabled=1;'
-      FROM @Parameters p;
-      PRINT @SQLText;
-      IF (SELECT ExecProcess FROM @Parameters) = 'Y'  EXECUTE sp_executeSQL @SQLText;
-      FETCH NEXT FROM Job_Names INTO @JobName;
-    END;
-    CLOSE Job_Names;
-    DEALLOCATE Job_Names;
-
-    SELECT @SQLText = 'Update of Job Data on server ' + p.TargetServer
-    FROM @Parameters p;
-    PRINT @SQLText;
-    PRINT '';
-
-  END;
-
-  IF (SELECT Operation FROM @Parameters) IN ('E') -- Enable Schedule Exceptions
-  BEGIN; 
-
-    SELECT @SQLText = 'Enable Schedule Exceptions on server ' + p.TargetServer
-    FROM @Parameters p;
-    PRINT @SQLText;
-    PRINT '';
-
-    SET @SQLText    = '';
-    SELECT
-     @SQLText       = p.CRLF + @SQLText + 'EXECUTE msdb.dbo.sp_update_schedule @schedule_id=' + Cast(s.schedule_id AS Varchar(8)) + ',@enabled=1; /* ' + j.name + ' */'
-    FROM msdb.dbo.sysschedules s
-    JOIN msdb.dbo.sysjobschedules js ON js.schedule_id = s.schedule_id
-    JOIN msdb.dbo.sysjobs j ON j.job_id = js.job_id
-    JOIN dbo.FB_AGSystemDataJobExceptions e ON e.AGName = p.AGName AND e.JobName = j.name
-    CROSS JOIN @Parameters p
-    ORDER BY j.name,s.schedule_id;
-    PRINT @SQLText;
-    IF ((SELECT ExecProcess FROM @Parameters) = 'Y') AND (@SQLText <> '') EXECUTE sp_executeSQL @SQLText;
-
-  END;
-
-END;
 
 GO
