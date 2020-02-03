@@ -4,4 +4,4 @@ SQL FineBuild provides 1-click install and best-practice configuration on Window
 
 **This release is no longer being maintained**
 
-** Please go to [SQL FineBuild 3.5](https://github.com/SQL-FineBuild/v3.5) for the latest release**
+Please go to [SQL FineBuild 3.5](https://github.com/SQL-FineBuild/v3.5) for the latest release
